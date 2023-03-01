@@ -1,0 +1,16 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  GREETING: Hello, World!
+
+tasks:
+  img:
+    cmds: 
+      - ffmpeg -i assets/src/videos/lake-mead-2d-labels.mp4 -v error -pix_fmt rgb24 -compression_algo lzw assets/generated/images/lake-mead-2d-labels_%05d.tiff
+
+  default:
+    cmds:
+      - echo "{{.GREETING}}"
+    silent: true
