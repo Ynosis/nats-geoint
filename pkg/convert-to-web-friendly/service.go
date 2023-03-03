@@ -112,7 +112,7 @@ func convertToWebFriendly(
 		return fmt.Errorf("can't decode tiff: %w", err)
 	}
 
-	maxDimension := 256
+	maxDimension := 2048
 	bounds := img.Bounds()
 	originalWidth, originalHeight := bounds.Dx(), bounds.Dy()
 	width, height := originalWidth, originalHeight

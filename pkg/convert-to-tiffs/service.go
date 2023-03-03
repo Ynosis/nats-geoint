@@ -137,7 +137,7 @@ func convertRawToTiffs(
 	}
 
 	rawCMD := fmt.Sprintf(
-		`ffmpeg -i %s -v info -filter:v scale=720:-1 %s/%%05d.png`,
+		`ffmpeg -i %s -v info -filter:v scale=2048:-1 %s/%%05d.png`,
 		tmpPath, tiffsDir,
 	)
 	log.Printf("Running command: %s", rawCMD)
