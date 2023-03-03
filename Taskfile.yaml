@@ -5,11 +5,21 @@ version: '3'
 vars:
   GREETING: Hello, World!
 
+interval: 50ms
+
 tasks:
   img:
     cmds: 
       - ffmpeg -i assets/src/videos/lake-mead-2d-labels.mp4 -v error -pix_fmt rgb24 -compression_algo lzw assets/generated/images/lake-mead-2d-labels_%05d.tiff
 
+  dev:
+    sources:
+      - "**/*.go"
+    cmds:
+      - killall -q microlith_bin || echo "Process was not running"
+      - go mod tidy
+      - go build -o microlith_bin cmd/microlith/main.go 
+      - ./microlith_bin
   default:
     cmds:
       - echo "{{.GREETING}}"

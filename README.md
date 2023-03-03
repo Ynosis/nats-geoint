@@ -11,16 +11,23 @@ WebFriendlyJobBuffer>NATS JetStream\nprocess-tiffs]
 
 PullRawSat-->RawObjectStore
 PullRawSat-->ConvertTiffJobBuffer
+PullRawSat-->|size/name|MetadataKV
 ConvertTiffJobBuffer-->ConvertVideosToTiff
 RawObjectStore-->ConvertVideosToTiff
 ConvertVideosToTiff-->WebFriendlyJobBuffer
 ConvertVideosToTiff-->TiffsFromSatellitesObjectStore
+ConvertVideosToTiff-->|resolution/frameCount|MetadataKV
 TiffsFromSatellitesObjectStore-->MakeWebFriendly-->WebFriendlySatellitesObjectStore
 WebFriendlyJobBuffer-->MakeWebFriendly
+MakeWebFriendly-->|url/thumbnail|MetadataKV
 
 WebFriendlySatellitesObjectStore-->BrowserA[/BrowserA\]
+MetadataKV-->BrowserA[/BrowserA\]
 WebFriendlySatellitesObjectStore-->BrowserB[/BrowserB\]
+MetadataKV-->BrowserB[/BrowserB\]
 WebFriendlySatellitesObjectStore-->BrowserC[/BrowserC\]
+MetadataKV-->BrowserC[/BrowserC\]
 WebFriendlySatellitesObjectStore-->BrowserD[/BrowserD\]
+MetadataKV-->BrowserD[/BrowserD\]
 
 ```

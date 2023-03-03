@@ -18,7 +18,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-func RunTiffsService(ctx context.Context) error {
+func Run(ctx context.Context) error {
 
 	nc := shared.NewNATsClient(ctx)
 
@@ -27,34 +27,47 @@ func RunTiffsService(ctx context.Context) error {
 		return fmt.Errorf("can't create JetStream context: %w", err)
 	}
 
+	b := backoff.NewExponentialBackOff()
+
 	var rawObjectStore, tiffObjectStore nats.ObjectStore
 	for rawObjectStore == nil || err != nil {
-		rawObjectStore, err = js.ObjectStore(shared.BUCKET_RAW_DATA_FROM_SATELLITES)
+		rawObjectStore, err = js.ObjectStore(shared.OBJECT_STORE_BUCKET_RAW_DATA_FROM_SATELLITES)
 		if err != nil {
 			log.Printf("can't create object store context: %v", err)
-			time.Sleep(1 * time.Second)
+			time.Sleep(b.NextBackOff())
 		}
 	}
+	b.Reset()
 	for tiffObjectStore == nil || err != nil {
 		tiffObjectStore, err = js.CreateObjectStore(&nats.ObjectStoreConfig{
-			Bucket:      shared.BUCKET_TIFFS_FROM_SATELLITES,
+			Bucket:      shared.OBJECT_STORE_BUCKET_TIFFS_FROM_SATELLITES,
 			Description: "TIFFs converted from raw data",
 		})
 		if err != nil {
 			log.Printf("can't create object store context: %v", err)
-			time.Sleep(1 * time.Second)
+			time.Sleep(b.NextBackOff())
 		}
 	}
+	b.Reset()
+
+	var metadataKVStore nats.KeyValue
+	for metadataKVStore == nil || err != nil {
+		metadataKVStore, err = js.KeyValue(shared.KEY_VALUE_STORE_BUCKET_SATELLITE_METADATA)
+		if err != nil {
+			log.Printf("can't create key value store context: %v", err)
+			time.Sleep(b.NextBackOff())
+		}
+	}
+	b.Reset()
 
 	sub, err := js.PullSubscribe(
-		shared.SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS, "convert_to_tiffs",
+		shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS, "convert_to_tiffs",
 		// nats.AckWait(5*time.Minute), // Convert raw to tiffs can take a while
 	)
 	if err != nil {
 		return fmt.Errorf("can't subscribe to subject: %w", err)
 	}
 
-	b := backoff.NewExponentialBackOff()
 	for {
 		select {
 		case <-ctx.Done():
@@ -70,10 +83,10 @@ func RunTiffsService(ctx context.Context) error {
 			b.Reset()
 
 			for _, msg := range msgs {
-				rawURL := string(msg.Data)
-				log.Printf("Received message: %s", rawURL)
+				videoFeedID := string(msg.Data)
+				log.Printf("Received message: %s", videoFeedID)
 
-				if err := convertRawToTiffs(js, rawObjectStore, tiffObjectStore, rawURL); err != nil {
+				if err := convertRawToTiffs(js, rawObjectStore, tiffObjectStore, metadataKVStore, videoFeedID); err != nil {
 					log.Printf("can't convert raw bytes to tiffs: %v", err)
 					break
 				}
@@ -88,17 +101,26 @@ func RunTiffsService(ctx context.Context) error {
 	}
 }
 
-func convertRawToTiffs(js nats.JetStreamContext, rawObjectStore, tiffObjectStore nats.ObjectStore, rawURL string) error {
-	tmpPath := fmt.Sprintf("./data/tmp/%s", rawURL)
+var (
+	frameRegex      = regexp.MustCompile(`frame=\s*(?P<frame>\d*)`)
+	resolutionRegex = regexp.MustCompile(`(?P<w>\d+\d+)x(?P<h>\d+\d+)`)
+)
+
+func convertRawToTiffs(
+	js nats.JetStreamContext,
+	rawObjectStore, tiffObjectStore nats.ObjectStore,
+	metadataKVStore nats.KeyValue,
+	videoFeedID string) error {
+	tmpPath := fmt.Sprintf("./data/tmp/%s", videoFeedID)
 	if err := os.MkdirAll(filepath.Dir(tmpPath), 0755); err != nil {
 		return fmt.Errorf("can't create temp directory: %w", err)
 	}
 
-	if err := rawObjectStore.GetFile(rawURL, tmpPath); err != nil {
+	if err := rawObjectStore.GetFile(videoFeedID, tmpPath); err != nil {
 		return fmt.Errorf("can't get raw bytes from object store: %w", err)
 	}
 
-	tiffsDir := fmt.Sprintf("./data/generated/%s", rawURL[:len(rawURL)-len(filepath.Ext(rawURL))])
+	tiffsDir := fmt.Sprintf("./data/generated/%s", videoFeedID[:len(videoFeedID)-len(filepath.Ext(videoFeedID))])
 	if err := os.MkdirAll(tiffsDir, 0755); err != nil {
 		return fmt.Errorf("can't create tiffs directory: %w", err)
 	}
@@ -118,7 +140,6 @@ func convertRawToTiffs(js nats.JetStreamContext, rawObjectStore, tiffObjectStore
 
 	log.Printf("Output: %s", output)
 
-	frameRegex := regexp.MustCompile(`frame=\s*(?P<frame>\d*)`)
 	frameMatches := frameRegex.FindAllStringSubmatch(string(output), -1)
 	if len(frameMatches) == 0 {
 		return fmt.Errorf("can't find frame count in ffmpeg output")
@@ -130,6 +151,36 @@ func convertRawToTiffs(js nats.JetStreamContext, rawObjectStore, tiffObjectStore
 	lastFrame, err := strconv.Atoi(lastMatch[1])
 	if err != nil {
 		return fmt.Errorf("can't parse frame count in ffmpeg output: %w", err)
+	}
+
+	resolutionMatches := resolutionRegex.FindAllStringSubmatch(string(output), -1)
+	if len(resolutionMatches) == 0 {
+		return fmt.Errorf("can't find resolution in ffmpeg output")
+	}
+
+	lastMatch = resolutionMatches[0]
+	if len(lastMatch) != 3 {
+		return fmt.Errorf("can't find resolution in ffmpeg output")
+	}
+	width, err := strconv.Atoi(lastMatch[1])
+	if err != nil {
+		return fmt.Errorf("can't parse width in ffmpeg output: %w", err)
+	}
+	height, err := strconv.Atoi(lastMatch[2])
+	if err != nil {
+		return fmt.Errorf("can't parse height in ffmpeg output: %w", err)
+	}
+
+	metadataEntry, err := metadataKVStore.Get(videoFeedID)
+	if err != nil {
+		return fmt.Errorf("can't get metadata from key value store: %w", err)
+	}
+	m := shared.MustSatelliteMetadataFromJSON(metadataEntry.Value())
+	m.FrameCount = lastFrame
+	m.OrginalResolutionHeight = height
+	m.OrginalResolutionWidth = width
+	if _, err := metadataKVStore.Put(videoFeedID, m.MustToJSON()); err != nil {
+		return fmt.Errorf("can't put metadata to key value store: %w", err)
 	}
 
 	lastUpdatedFrame := 0
@@ -158,17 +209,22 @@ func convertRawToTiffs(js nats.JetStreamContext, rawObjectStore, tiffObjectStore
 			}
 
 			tiffPath := fmt.Sprintf("%s/%s", tiffsDir, entry.Name())
+			tiffBytes, err := os.ReadFile(tiffPath)
+			if err != nil {
+				return fmt.Errorf("can't read tiff file: %w", err)
+			}
+			tiffObjectStorePath := fmt.Sprintf("%s_%05d", videoFeedID, frame)
 
-			if _, err := tiffObjectStore.PutFile(tiffPath); err != nil {
+			if _, err := tiffObjectStore.PutBytes(tiffObjectStorePath, tiffBytes); err != nil {
 				return fmt.Errorf("can't put tiff to object store: %w", err)
 			}
 
-			if _, err := js.Publish(shared.SATELLITE_JOBS_CONVERT_TIFFS_TO_WEB, []byte(tiffPath)); err != nil {
+			if _, err := js.Publish(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_TIFFS_TO_WEB, []byte(tiffObjectStorePath)); err != nil {
 				return fmt.Errorf("can't publish convert tiffs to web message: %w", err)
 			}
 
 			lastUpdatedFrame = frame
-			log.Printf("Uploaded frame %05d from %s", frame, rawURL)
+			log.Printf("Uploaded frame %05d from %s", frame, videoFeedID)
 		}
 	}
 

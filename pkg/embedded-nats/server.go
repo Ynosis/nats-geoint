@@ -17,6 +17,10 @@ func NewNatsEmbeddedNATsServer(ctx context.Context) (*NATsEmbeddedNATsServer, er
 	ns, err := server.NewServer(&server.Options{
 		JetStream: true,
 		StoreDir:  "./data/microlith-data",
+		Websocket: server.WebsocketOpts{
+			Port:  4443,
+			NoTLS: true,
+		},
 	})
 
 	if err != nil {

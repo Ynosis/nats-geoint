@@ -6,7 +6,10 @@ require (
 	github.com/anthonynsimon/bild v0.13.0
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/cenkalti/backoff/v4 v4.2.0
-	github.com/dustin/go-humanize v1.0.1
+	github.com/cespare/xxhash/v2 v2.2.0
+	github.com/go-chi/chi/v5 v5.0.8
+	github.com/go-chi/render v1.0.2
+	github.com/maragudk/gomponents v0.20.1
 	github.com/nats-io/nats-server/v2 v2.9.14
 	github.com/nats-io/nats.go v1.24.0
 	github.com/valyala/bytebufferpool v1.0.0
@@ -14,6 +17,8 @@ require (
 	golang.org/x/image v0.5.0
 	golang.org/x/sync v0.1.0
 )
+
+require github.com/ajg/form v1.5.1 // indirect
 
 require (
 	github.com/klauspost/compress v1.15.15 // indirect

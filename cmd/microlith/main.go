@@ -36,16 +36,20 @@ func run(ctx context.Context) error {
 	eg, setupCtx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
-		return converttotiffs.RunTiffsService(setupCtx)
+		return converttotiffs.Run(setupCtx)
 	})
 
 	eg.Go(func() error {
-		return datafromsatellites.PullDataFromSatellitesService(setupCtx)
+		return datafromsatellites.Run(setupCtx)
 	})
 
 	eg.Go(func() error {
-		return converttowebfriendly.RunConvertToWebFriendlyService(setupCtx)
+		return converttowebfriendly.Run(setupCtx)
 	})
+
+	// eg.Go(func() error {
+	// 	return frontend.Run(ctx)
+	// })
 
 	if err := eg.Wait(); err != nil {
 		return fmt.Errorf("error running services: %w", err)

@@ -1,13 +1,15 @@
 package shared
 
 const (
-	BUCKET_RAW_DATA_FROM_SATELLITES     = "raw-data-from-satellites"
-	SATELLITE_JOBS                      = "satellites.jobs"
-	SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS = SATELLITE_JOBS + ".convert-raw-to-tiffs"
-	SATELLITE_JOBS_CONVERT_TIFFS_TO_WEB = SATELLITE_JOBS + ".convert-tiffs-to-web"
+	KEY_VALUE_STORE_BUCKET_SATELLITE_METADATA = "satellite-metadata"
 
-	BUCKET_TIFFS_FROM_SATELLITES = "tiffs-from-satellites"
-	BUCKET_WEB_FRIENDLY_IMAGES   = "web-friendly-images"
+	OBJECT_STORE_BUCKET_RAW_DATA_FROM_SATELLITES = "raw-data-from-satellites"
+	OBJECT_STORE_BUCKET_TIFFS_FROM_SATELLITES    = "tiffs-from-satellites"
+	OBJECT_STORE_BUCKET_WEB_FRIENDLY_IMAGES      = "web-friendly-images"
+
+	JETSTREAM_SATELLITE_JOBS                      = "satellites.jobs"
+	JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS = JETSTREAM_SATELLITE_JOBS + ".convert-raw-to-tiffs"
+	JETSTREAM_SATELLITE_JOBS_CONVERT_TIFFS_TO_WEB = JETSTREAM_SATELLITE_JOBS + ".convert-tiffs-to-web"
 
 	// RAW_DATA_FROM_SATELLITES_SUBJECT = "demo.satellites.raw"
 )

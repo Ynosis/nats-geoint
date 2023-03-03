@@ -10,11 +10,12 @@ import (
 	"path/filepath"
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
+	"github.com/cespare/xxhash/v2"
 	"github.com/nats-io/nats.go"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-func PullDataFromSatellitesService(ctx context.Context) error {
+func Run(ctx context.Context) error {
 
 	nc := shared.NewNATsClient(ctx)
 
@@ -25,15 +26,23 @@ func PullDataFromSatellitesService(ctx context.Context) error {
 
 	if _, err := js.AddStream(&nats.StreamConfig{
 		Name:     "SATELLITE_JOBS",
-		Subjects: []string{shared.SATELLITE_JOBS + ".>"},
+		Subjects: []string{shared.JETSTREAM_SATELLITE_JOBS + ".>"},
 	}); err != nil {
 		return fmt.Errorf("can't create stream: %w", err)
 	}
 
-	objectStore, err := js.ObjectStore(shared.BUCKET_RAW_DATA_FROM_SATELLITES)
+	kvMetadata, err := js.CreateKeyValue(&nats.KeyValueConfig{
+		Bucket:  shared.KEY_VALUE_STORE_BUCKET_SATELLITE_METADATA,
+		Storage: nats.FileStorage,
+	})
 	if err != nil {
-		objectStore, err = js.CreateObjectStore(&nats.ObjectStoreConfig{
-			Bucket:      shared.BUCKET_RAW_DATA_FROM_SATELLITES,
+		return fmt.Errorf("can't create kv metadata: %w", err)
+	}
+
+	rawDataStore, err := js.ObjectStore(shared.OBJECT_STORE_BUCKET_RAW_DATA_FROM_SATELLITES)
+	if err != nil {
+		rawDataStore, err = js.CreateObjectStore(&nats.ObjectStoreConfig{
+			Bucket:      shared.OBJECT_STORE_BUCKET_RAW_DATA_FROM_SATELLITES,
 			Description: "Raw data from satellites, faked with mp4 files for now",
 		})
 		if err != nil {
@@ -61,7 +70,7 @@ func PullDataFromSatellitesService(ctx context.Context) error {
 		return fmt.Errorf("can't decode video urls file: %w", err)
 	}
 
-	existingRaw, err := objectStore.List()
+	existingRaw, err := rawDataStore.List()
 	if err != nil && err != nats.ErrNoObjectsFound {
 		return fmt.Errorf("can't list existing raw assets: %w", err)
 	}
@@ -71,26 +80,35 @@ func PullDataFromSatellitesService(ctx context.Context) error {
 	}
 
 	for _, url := range videoURLs.Videos {
-		if existingRawSet.Has(url) {
+		id := xxhash.Sum64String(url)
+		idStr := fmt.Sprint(id)
+		if existingRawSet.Has(idStr) {
 			continue
 		}
+
 		res, err := http.DefaultClient.Get(url)
 		if err != nil {
 			return fmt.Errorf("can't get file %s: %w", url, err)
 		}
-
 		if res.StatusCode != http.StatusOK {
 			return fmt.Errorf("can't get file %s: %s", url, res.Status)
 		}
 
-		if _, err := objectStore.Put(&nats.ObjectMeta{Name: url}, res.Body); err != nil {
+		m := &shared.SatelliteMetadata{
+			ID:               id,
+			InitialSourceURL: url,
+		}
+		if _, err := kvMetadata.Put(idStr, m.MustToJSON()); err != nil {
+			return fmt.Errorf("can't put metadata into kv store: %w", err)
+		}
+
+		if _, err := rawDataStore.Put(&nats.ObjectMeta{Name: idStr}, res.Body); err != nil {
 			return fmt.Errorf("can't put file %s into object store: %w", url, err)
 		}
 
-		if _, err := js.Publish(shared.SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS, []byte(url)); err != nil {
+		if _, err := js.Publish(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS, []byte(idStr)); err != nil {
 			return fmt.Errorf("can't publish job to convert raw to tiffs: %w", err)
 		}
-
 	}
 
 	return nil
