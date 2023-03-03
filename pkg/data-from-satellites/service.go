@@ -86,6 +86,7 @@ func Run(ctx context.Context) error {
 			continue
 		}
 
+		log.Printf("downloading %s with hash %s", url, idStr)
 		res, err := http.DefaultClient.Get(url)
 		if err != nil {
 			return fmt.Errorf("can't get file %s: %w", url, err)

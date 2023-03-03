@@ -62,10 +62,21 @@ func Run(ctx context.Context) error {
 
 	sub, err := js.PullSubscribe(
 		shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS, "convert_to_tiffs",
-		// nats.AckWait(5*time.Minute), // Convert raw to tiffs can take a while
+		nats.AckWait(5*time.Minute), // Convert raw to tiffs can take a while
 	)
 	if err != nil {
 		return fmt.Errorf("can't subscribe to subject: %w", err)
+	}
+
+	ci, err := js.ConsumerInfo("SATELLITE_JOBS", "convert_to_tiffs")
+	if err != nil {
+		return fmt.Errorf("can't create consumer: %w", err)
+	}
+	if ci.Config.AckWait != 5*time.Minute {
+		ci.Config.AckWait = 5 * time.Minute
+		if _, err := js.UpdateConsumer(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS, &ci.Config); err != nil {
+			return fmt.Errorf("can't update consumer: %w", err)
+		}
 	}
 
 	for {
@@ -126,7 +137,7 @@ func convertRawToTiffs(
 	}
 
 	rawCMD := fmt.Sprintf(
-		`ffmpeg -i %s -v info -pix_fmt rgb24 -compression_algo lzw %s/%%05d.tiff`,
+		`ffmpeg -i %s -v info -filter:v scale=720:-1 %s/%%05d.png`,
 		tmpPath, tiffsDir,
 	)
 	log.Printf("Running command: %s", rawCMD)

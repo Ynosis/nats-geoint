@@ -110,7 +110,7 @@ export const Metadata = () => {
           }
 
           const streamRes = await res.data.getReader().read()
-          const blob = new Blob([streamRes.value], { type: 'image/png' })
+          const blob = new Blob([streamRes.value], { type: 'image/jpeg' })
           const url = URL.createObjectURL(blob)
           return url
         }),
@@ -158,7 +158,7 @@ export const Metadata = () => {
         }
 
         const streamRes = await res.data.getReader().read()
-        const blob = new Blob([streamRes.value], { type: 'image/png' })
+        const blob = new Blob([streamRes.value], { type: 'image/jpeg' })
         const url = URL.createObjectURL(blob)
         return url
       }),
@@ -256,6 +256,9 @@ export const Metadata = () => {
                   when={metadata.lastFrameProcessed !== metadata.frameCount}
                   fallback={<div>All processing done</div>}
                 >
+                  <div>
+                    {metadata.lastFrameProcessed} / {metadata.frameCount}
+                  </div>
                   <progress
                     class="progress progress-primary w-full"
                     value={metadata.lastFrameProcessed}

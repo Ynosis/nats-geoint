@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image/jpeg"
 	"image/png"
 	"log"
 	"strconv"
@@ -15,7 +16,6 @@ import (
 	"github.com/cenkalti/backoff"
 	"github.com/nats-io/nats.go"
 	"github.com/valyala/bytebufferpool"
-	"golang.org/x/image/tiff"
 )
 
 func Run(ctx context.Context) error {
@@ -107,12 +107,12 @@ func convertToWebFriendly(
 		return fmt.Errorf("can't get bytes from object store: %w", err)
 	}
 	r := bytes.NewReader(buf)
-	img, err := tiff.Decode(r)
+	img, err := png.Decode(r)
 	if err != nil {
 		return fmt.Errorf("can't decode tiff: %w", err)
 	}
 
-	maxDimension := 2048
+	maxDimension := 256
 	bounds := img.Bounds()
 	originalWidth, originalHeight := bounds.Dx(), bounds.Dy()
 	width, height := originalWidth, originalHeight
@@ -131,7 +131,7 @@ func convertToWebFriendly(
 
 	webPngBuf := bytebufferpool.Get()
 	defer bytebufferpool.Put(webPngBuf)
-	if err := png.Encode(webPngBuf, img); err != nil {
+	if err := jpeg.Encode(webPngBuf, img, nil); err != nil {
 		return fmt.Errorf("can't encode png: %w", err)
 	}
 	if _, err := webObjectStore.PutBytes(tiffURL+"_full", webPngBuf.Bytes()); err != nil {
@@ -153,7 +153,7 @@ func convertToWebFriendly(
 	thumbnail := transform.Resize(img, thumbnailWidth, thumbnailHeight, transform.Lanczos)
 	thumbnailBuf := bytebufferpool.Get()
 	defer bytebufferpool.Put(thumbnailBuf)
-	if err := png.Encode(thumbnailBuf, thumbnail); err != nil {
+	if err := jpeg.Encode(thumbnailBuf, thumbnail, nil); err != nil {
 		return fmt.Errorf("can't encode png: %w", err)
 	}
 	if _, err := webObjectStore.PutBytes(tiffURL+"_thumbnail", thumbnailBuf.Bytes()); err != nil {
