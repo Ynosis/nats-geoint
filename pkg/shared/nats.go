@@ -12,7 +12,7 @@ func NewNATsClient(ctx context.Context) (nc *nats.Conn) {
 
 	natsServerURL, exists := os.LookupEnv("NATS_SERVER_URL")
 	if !exists {
-		natsServerURL = "nats://localhost:4222"
+		panic("NATS_SERVER_URL not set")
 	}
 
 	var err error

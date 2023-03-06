@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -86,14 +87,47 @@ func Run(ctx context.Context) error {
 			continue
 		}
 
-		log.Printf("downloading %s with hash %s", url, idStr)
-		res, err := http.DefaultClient.Get(url)
+		tmpExt := filepath.Ext(url)
+		tmpFile := fmt.Sprintf("./data/src/%d%s", id, tmpExt)
+		tmpFile, err := filepath.Abs(tmpFile)
 		if err != nil {
-			return fmt.Errorf("can't get file %s: %w", url, err)
+			return fmt.Errorf("can't get absolute path for %s: %w", tmpFile, err)
 		}
-		if res.StatusCode != http.StatusOK {
-			return fmt.Errorf("can't get file %s: %s", url, res.Status)
+		if err := os.MkdirAll(filepath.Dir(tmpFile), 0755); err != nil {
+			return fmt.Errorf("can't create dir for %s: %w", tmpFile, err)
 		}
+
+		var satelliteDataReader io.Reader
+
+		if stat, err := os.Stat(tmpFile); err != nil || stat.Size() == 0 {
+			log.Printf("downloading %s with hash %s", url, idStr)
+			res, err := http.DefaultClient.Get(url)
+			if err != nil {
+				return fmt.Errorf("can't get file %s: %w", url, err)
+			}
+			if res.StatusCode != http.StatusOK {
+
+				return fmt.Errorf("can't get file %s: %s", url, res.Status)
+			}
+			defer res.Body.Close()
+
+			f, err := os.Create(tmpFile)
+			if err != nil {
+				return fmt.Errorf("can't create file %s: %w", tmpFile, err)
+			}
+			defer f.Close()
+
+			if _, err := io.Copy(f, res.Body); err != nil {
+				return fmt.Errorf("can't copy file %s: %w", tmpFile, err)
+			}
+		}
+
+		f, err := os.Open(tmpFile)
+		if err != nil {
+			return fmt.Errorf("can't open file %s: %w", tmpFile, err)
+		}
+		defer f.Close()
+		satelliteDataReader = f
 
 		m := &shared.SatelliteMetadata{
 			ID:               id,
@@ -103,12 +137,12 @@ func Run(ctx context.Context) error {
 			return fmt.Errorf("can't put metadata into kv store: %w", err)
 		}
 
-		if _, err := rawDataStore.Put(&nats.ObjectMeta{Name: idStr}, res.Body); err != nil {
+		if _, err := rawDataStore.Put(&nats.ObjectMeta{Name: idStr}, satelliteDataReader); err != nil {
 			return fmt.Errorf("can't put file %s into object store: %w", url, err)
 		}
 
-		if _, err := js.Publish(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS, []byte(idStr)); err != nil {
-			return fmt.Errorf("can't publish job to convert raw to tiffs: %w", err)
+		if _, err := js.Publish(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_HIREZ, []byte(idStr)); err != nil {
+			return fmt.Errorf("can't publish job to convert raw to highrez: %w", err)
 		}
 	}
 

@@ -2,22 +2,22 @@
 graph TD;
 PullRawSat[Service\nPull satellite raw data]
 RawObjectStore[(NATS ObjectStore\nraw-data-from-satellites\nbucket)]
-ConvertTiffJobBuffer>NATS JetStream\nsatellites.jobs.raw-to-tiffs]
-ConvertVideosToTiff[Service\nConvert raw to tiffs]
-TiffsFromSatellitesObjectStore[(NATS ObjectStore\ntiffs-from-satellites\nbucket)]
+ConvertHiRezJobBuffer>NATS JetStream\nsatellites.jobs.raw-to-hirez]
+ConvertVideosToHiRez[Service\nConvert raw to hirez]
+HiRezsFromSatellitesObjectStore[(NATS ObjectStore\nhirez-from-satellites\nbucket)]
 MakeWebFriendly[Service\nMake web friendly\nweb images\nand thumbnails]
 WebFriendlySatellitesObjectStore>NATS JetStream\nweb-satellites-data]
-WebFriendlyJobBuffer>NATS JetStream\nprocess-tiffs]
+WebFriendlyJobBuffer>NATS JetStream\nprocess-hirez]
 
 PullRawSat-->RawObjectStore
-PullRawSat-->ConvertTiffJobBuffer
+PullRawSat-->ConvertHiRezJobBuffer
 PullRawSat-->|size/name|MetadataKV
-ConvertTiffJobBuffer-->ConvertVideosToTiff
-RawObjectStore-->ConvertVideosToTiff
-ConvertVideosToTiff-->WebFriendlyJobBuffer
-ConvertVideosToTiff-->TiffsFromSatellitesObjectStore
-ConvertVideosToTiff-->|resolution/frameCount|MetadataKV
-TiffsFromSatellitesObjectStore-->MakeWebFriendly-->WebFriendlySatellitesObjectStore
+ConvertHiRezJobBuffer-->ConvertVideosToHiRez
+RawObjectStore-->ConvertVideosToHiRez
+ConvertVideosToHiRez-->WebFriendlyJobBuffer
+ConvertVideosToHiRez-->HiRezsFromSatellitesObjectStore
+ConvertVideosToHiRez-->|resolution/frameCount|MetadataKV
+HiRezsFromSatellitesObjectStore-->MakeWebFriendly-->WebFriendlySatellitesObjectStore
 WebFriendlyJobBuffer-->MakeWebFriendly
 MakeWebFriendly-->|url/thumbnail|MetadataKV
 

@@ -1,4 +1,4 @@
-package converttotiffs
+package converttohirez
 
 import (
 	"context"
@@ -29,7 +29,7 @@ func Run(ctx context.Context) error {
 
 	b := backoff.NewExponentialBackOff()
 
-	var rawObjectStore, tiffObjectStore nats.ObjectStore
+	var rawObjectStore, hirezObjectStore nats.ObjectStore
 	for rawObjectStore == nil || err != nil {
 		rawObjectStore, err = js.ObjectStore(shared.OBJECT_STORE_BUCKET_RAW_DATA_FROM_SATELLITES)
 		if err != nil {
@@ -38,9 +38,9 @@ func Run(ctx context.Context) error {
 		}
 	}
 	b.Reset()
-	for tiffObjectStore == nil || err != nil {
-		tiffObjectStore, err = js.CreateObjectStore(&nats.ObjectStoreConfig{
-			Bucket:      shared.OBJECT_STORE_BUCKET_TIFFS_FROM_SATELLITES,
+	for hirezObjectStore == nil || err != nil {
+		hirezObjectStore, err = js.CreateObjectStore(&nats.ObjectStoreConfig{
+			Bucket:      shared.OBJECT_STORE_BUCKET_HIREZ_FROM_SATELLITES,
 			Description: "TIFFs converted from raw data",
 		})
 		if err != nil {
@@ -61,20 +61,20 @@ func Run(ctx context.Context) error {
 	b.Reset()
 
 	sub, err := js.PullSubscribe(
-		shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS, "convert_to_tiffs",
-		nats.AckWait(5*time.Minute), // Convert raw to tiffs can take a while
+		shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_HIREZ, "convert_to_hirez",
+		nats.AckWait(5*time.Minute), // Convert raw to hirez can take a while
 	)
 	if err != nil {
 		return fmt.Errorf("can't subscribe to subject: %w", err)
 	}
 
-	ci, err := js.ConsumerInfo("SATELLITE_JOBS", "convert_to_tiffs")
+	ci, err := js.ConsumerInfo("SATELLITE_JOBS", "convert_to_hirez")
 	if err != nil {
 		return fmt.Errorf("can't create consumer: %w", err)
 	}
 	if ci.Config.AckWait != 5*time.Minute {
 		ci.Config.AckWait = 5 * time.Minute
-		if _, err := js.UpdateConsumer(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_TIFFS, &ci.Config); err != nil {
+		if _, err := js.UpdateConsumer(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_HIREZ, &ci.Config); err != nil {
 			return fmt.Errorf("can't update consumer: %w", err)
 		}
 	}
@@ -97,8 +97,8 @@ func Run(ctx context.Context) error {
 				videoFeedID := string(msg.Data)
 				log.Printf("Received message: %s", videoFeedID)
 
-				if err := convertRawToTiffs(js, rawObjectStore, tiffObjectStore, metadataKVStore, videoFeedID); err != nil {
-					log.Printf("can't convert raw bytes to tiffs: %v", err)
+				if err := convertRawToHirez(js, rawObjectStore, hirezObjectStore, metadataKVStore, videoFeedID); err != nil {
+					log.Printf("can't convert raw bytes to hirez: %v", err)
 					break
 				}
 
@@ -117,9 +117,9 @@ var (
 	resolutionRegex = regexp.MustCompile(`(?P<w>\d+\d+)x(?P<h>\d+\d+)`)
 )
 
-func convertRawToTiffs(
+func convertRawToHirez(
 	js nats.JetStreamContext,
-	rawObjectStore, tiffObjectStore nats.ObjectStore,
+	rawObjectStore, hirezObjectStore nats.ObjectStore,
 	metadataKVStore nats.KeyValue,
 	videoFeedID string) error {
 	tmpPath := fmt.Sprintf("./data/tmp/%s", videoFeedID)
@@ -131,22 +131,28 @@ func convertRawToTiffs(
 		return fmt.Errorf("can't get raw bytes from object store: %w", err)
 	}
 
-	tiffsDir := fmt.Sprintf("./data/generated/%s", videoFeedID[:len(videoFeedID)-len(filepath.Ext(videoFeedID))])
-	if err := os.MkdirAll(tiffsDir, 0755); err != nil {
-		return fmt.Errorf("can't create tiffs directory: %w", err)
+	hirezDir := fmt.Sprintf("./data/generated/%s", videoFeedID[:len(videoFeedID)-len(filepath.Ext(videoFeedID))])
+	if err := os.MkdirAll(hirezDir, 0755); err != nil {
+		return fmt.Errorf("can't create hirez directory: %w", err)
 	}
 
 	rawCMD := fmt.Sprintf(
-		`ffmpeg -i %s -v info -filter:v scale=2048:-1 %s/%%05d.png`,
-		tmpPath, tiffsDir,
+		`ffmpeg -i %s -pix_fmt rgb24 -compression_algo lzw -v info -filter:v scale=2048:-1 %s/%%05d.tif`,
+		tmpPath, hirezDir,
 	)
 	log.Printf("Running command: %s", rawCMD)
 	rawCMDParts := strings.Split(rawCMD, " ")
 	cmd := exec.Command(rawCMDParts[0], rawCMDParts[1:]...)
+	// cmd.Stdout = os.Stdout
+	// cmd.Stderr = os.Stderr
+
+	// if err := cmd.Run(); err != nil {
+	// 	return fmt.Errorf("can't convert raw bytes to hirez: %w", err)
+	// }
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("can't convert raw bytes to tiffs: %w", err)
+		return fmt.Errorf("can't convert raw bytes to hirez: %w", err)
 	}
 
 	log.Printf("Output: %s", output)
@@ -196,9 +202,9 @@ func convertRawToTiffs(
 
 	lastUpdatedFrame := 0
 	for lastUpdatedFrame != lastFrame {
-		dirEntry, err := os.ReadDir(tiffsDir)
+		dirEntry, err := os.ReadDir(hirezDir)
 		if err != nil {
-			return fmt.Errorf("can't read tiffs directory: %w", err)
+			return fmt.Errorf("can't read hirez directory: %w", err)
 		}
 
 		slices.SortFunc(dirEntry, func(i, j os.DirEntry) bool {
@@ -212,26 +218,26 @@ func convertRawToTiffs(
 
 			frame, err := strconv.Atoi(entry.Name()[:len(entry.Name())-len(filepath.Ext(entry.Name()))])
 			if err != nil {
-				return fmt.Errorf("can't parse frame number from tiff file: %w", err)
+				return fmt.Errorf("can't parse frame number from hirez file: %w", err)
 			}
 
 			if frame < lastUpdatedFrame {
 				continue
 			}
 
-			tiffPath := fmt.Sprintf("%s/%s", tiffsDir, entry.Name())
-			tiffBytes, err := os.ReadFile(tiffPath)
+			hirezPath := fmt.Sprintf("%s/%s", hirezDir, entry.Name())
+			hirezBytes, err := os.ReadFile(hirezPath)
 			if err != nil {
-				return fmt.Errorf("can't read tiff file: %w", err)
+				return fmt.Errorf("can't read hirez file: %w", err)
 			}
-			tiffObjectStorePath := fmt.Sprintf("%s_%05d", videoFeedID, frame)
+			hirezObjectStorePath := fmt.Sprintf("%s_%05d", videoFeedID, frame)
 
-			if _, err := tiffObjectStore.PutBytes(tiffObjectStorePath, tiffBytes); err != nil {
-				return fmt.Errorf("can't put tiff to object store: %w", err)
+			if _, err := hirezObjectStore.PutBytes(hirezObjectStorePath, hirezBytes); err != nil {
+				return fmt.Errorf("can't put hirez to object store: %w", err)
 			}
 
-			if _, err := js.Publish(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_TIFFS_TO_WEB, []byte(tiffObjectStorePath)); err != nil {
-				return fmt.Errorf("can't publish convert tiffs to web message: %w", err)
+			if _, err := js.Publish(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_HIREZ_TO_WEB, []byte(hirezObjectStorePath)); err != nil {
+				return fmt.Errorf("can't publish convert hirez to web message: %w", err)
 			}
 
 			lastUpdatedFrame = frame

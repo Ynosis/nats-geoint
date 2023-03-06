@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	converttotiffs "github.com/ConnectEverything/sales-poc-accenture/pkg/convert-to-tiffs"
+	hirez "github.com/ConnectEverything/sales-poc-accenture/pkg/convert-to-hirez"
 	converttowebfriendly "github.com/ConnectEverything/sales-poc-accenture/pkg/convert-to-web-friendly"
 	datafromsatellites "github.com/ConnectEverything/sales-poc-accenture/pkg/data-from-satellites"
 	embeddednats "github.com/ConnectEverything/sales-poc-accenture/pkg/embedded-nats"
@@ -36,7 +36,7 @@ func run(ctx context.Context) error {
 	eg, setupCtx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
-		return converttotiffs.Run(setupCtx)
+		return hirez.Run(setupCtx)
 	})
 
 	eg.Go(func() error {
