@@ -1,0 +1,46 @@
+services:
+  nats-server:
+    image: nats:latest
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - .:/etc/nats
+      - ./nats.conf:/etc/nats/nats.conf
+    command: ["-c", "/etc/nats/nats.conf"]
+    networks:
+      - nats-network
+  
+  data-from-satellites:
+    build: .
+    networks:
+      - nats-network
+    depends_on:
+      - nats-server
+    environment:
+      - NATS_SERVER_URL=nats://nats-server:4222
+      - STAGE=1
+
+  convert-to-hirez:
+    build: .
+    networks:
+      - nats-network
+    depends_on:
+      - nats-server
+    environment:
+      - NATS_SERVER_URL=nats://nats-server:4222
+      - STAGE=2
+
+  convert-to-web-friendly:
+    build: .
+    networks:
+      - nats-network
+    depends_on:
+      - nats-server
+    environment:
+      - NATS_SERVER_URL=nats://nats-server:4222
+      - STAGE=3
+
+networks:
+  nats-network: {}
+  

@@ -97,6 +97,7 @@ export const Metadata = () => {
 
       return await Promise.all(
         mm.map(async (metadata, i) => {
+          if (!metadata) return
           const frameOffset = offsets[i]
           if (!frameOffset) return
           const path = `${metadata.id}_${frameOffset
@@ -137,6 +138,7 @@ export const Metadata = () => {
   const [fullSizeImageFrames, setFullSizeImageFrames] = createSignal<number[]>(
     [],
   )
+
   const [fullSizeImageData] = createResource(fullSizeImageFrames, async () => {
     const webImageStore = imageStore()
     if (!webImageStore) return []
@@ -157,13 +159,46 @@ export const Metadata = () => {
           return
         }
 
-        const streamRes = await res.data.getReader().read()
-        const blob = new Blob([streamRes.value], { type: 'image/jpeg' })
+        const r = await res.data.getReader()
+        const blobParts: Uint8Array[] = []
+        while (true) {
+          const { done, value } = await r.read()
+          if (done) {
+            break
+          }
+          if (value && value.length) {
+            blobParts.push(value)
+          }
+        }
+
+        const blob = new Blob(blobParts, { type: 'image/jpeg' })
         const url = URL.createObjectURL(blob)
         return url
       }),
     )
   })
+
+  const showFullSizeImage = (idx: number, frameOffset: number) => {
+    const frames = [...fullSizeImageFrames()]
+    frames[idx] = frameOffset
+    setFullSizeImageFrames(frames)
+  }
+
+  const hideFullSizeImage = (idx: number) => {
+    const frames = [...fullSizeImageFrames()]
+    frames[idx] = undefined
+    setFullSizeImageFrames(frames)
+  }
+
+  const toggleFullSizeImage = (idx: number, frameOffset: number) => {
+    const frames = [...fullSizeImageFrames()]
+    if (frames[idx] === frameOffset) {
+      frames[idx] = undefined
+    } else {
+      frames[idx] = frameOffset
+    }
+    setFullSizeImageFrames(frames)
+  }
 
   return (
     <Show when={metadataKV()} fallback={<div>No NATs connection</div>}>
@@ -223,8 +258,11 @@ export const Metadata = () => {
                               : 'btn-ghost'
                           }`}
                           onClick={() => {
+                            const idx = i()
+                            hideFullSizeImage(idx)
+
                             const offsets = [...currentFrameOffsets()]
-                            offsets[i()] = frameOffset
+                            offsets[idx] = frameOffset
                             setCurrentFrameOffset(offsets)
                           }}
                         >
@@ -233,18 +271,16 @@ export const Metadata = () => {
                       )}
                     </For>
                   </div>
-                  {fullSizeImageFrames()}
                   <button
                     class="btn btn-secondary w-full btn-ghost"
                     onClick={() => {
-                      const frames = [...fullSizeImageFrames()]
-                      frames[i()] = currentFrameOffsets()[i()]
-                      setFullSizeImageFrames(frames)
+                      const idx = i()
+                      toggleFullSizeImage(idx, currentFrameOffsets()[idx])
                     }}
                   >
-                    Show full size
+                    {fullSizeImageFrames()[i()] ? 'Hide' : 'Show'} full size
                   </button>
-                  <Show when={fullSizeImageData()}>
+                  <Show when={fullSizeImageFrames()[i()]}>
                     <img
                       class="rounded-xl object-contain"
                       src={fullSizeImageData()[i()]}

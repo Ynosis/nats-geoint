@@ -12,8 +12,16 @@
       "program": "${workspaceFolder}/cmd/microlith/main.go",
       "cwd": "${workspaceFolder}",
       "env": {
-        "NATS_SERVER_URL": "nats://localhost:4222"
+        "STAGE": "0"
       }
+    },
+    {
+      "name": "Accenture",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/accenture/main.go",
+      "cwd": "${workspaceFolder}/cmd/accenture"
     }
   ]
 }
