@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime/pprof"
-	"strconv"
 
-	converttohirez "github.com/ConnectEverything/sales-poc-accenture/pkg/convert-to-hirez"
-	converttowebfriendly "github.com/ConnectEverything/sales-poc-accenture/pkg/convert-to-web-friendly"
-	datafromsatellites "github.com/ConnectEverything/sales-poc-accenture/pkg/data-from-satellites"
 	embeddednats "github.com/ConnectEverything/sales-poc-accenture/pkg/embedded-nats"
+	satelliteimageryhirez "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-hirez"
+	satelliteimagerymetadata "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-metadata"
+	satelliteimagerypullfeeds "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-pull-feeds"
 	"golang.org/x/sync/errgroup"
 
 	_ "net/http/pprof"
@@ -40,16 +40,17 @@ func run(ctx context.Context) error {
 	}
 	defer pprof.StopCPUProfile()
 
-	stageRaw := os.Getenv("STAGE")
-	if stageRaw == "" {
-		stageRaw = "0"
-	}
-	stage, err := strconv.Atoi(stageRaw)
-	if err != nil {
-		return fmt.Errorf("can't parse STAGE: %w", err)
+	stage := os.Getenv("STAGE")
+	if stage == "" {
+		stage = "all"
 	}
 
-	if stage == 0 {
+	tmpDir := filepath.Join(os.TempDir(), "satellite-demo")
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		return fmt.Errorf("can't create tmp dir: %w", err)
+	}
+
+	if stage == "all" {
 		os.Setenv("NATS_SERVER_URL", "nats://localhost:4222")
 
 		natsSrv, err := embeddednats.NewNatsEmbeddedNATsServer(ctx)
@@ -62,23 +63,29 @@ func run(ctx context.Context) error {
 
 	eg, setupCtx := errgroup.WithContext(ctx)
 
-	if stage == 0 || stage == 1 {
+	if stage == "all" || stage == "imagery" || stage == "imagery-metadata" {
 		eg.Go(func() error {
-			return datafromsatellites.Run(setupCtx)
+			return satelliteimagerymetadata.Run(setupCtx)
 		})
 	}
 
-	if stage == 0 || stage == 2 {
+	if stage == "all" || stage == "imagery" || stage == "imagery-pull-feeds" {
 		eg.Go(func() error {
-			return converttohirez.Run(setupCtx)
+			return satelliteimagerypullfeeds.Run(setupCtx, tmpDir)
 		})
 	}
 
-	if stage == 0 || stage == 3 {
+	if stage == "all" || stage == "imagery" || stage == "imagery-hirez" {
 		eg.Go(func() error {
-			return converttowebfriendly.Run(setupCtx)
+			return satelliteimageryhirez.Run(setupCtx, tmpDir)
 		})
 	}
+
+	// if stage == 0 || stage == 3 {
+	// 	eg.Go(func() error {
+	// 		return converttowebfriendly.Run(setupCtx)
+	// 	})
+	// }
 
 	// if stage == 0 || stage == 4 {
 	// 	eg.Go(func() error {

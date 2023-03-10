@@ -3,12 +3,33 @@ package shared
 import "encoding/json"
 
 type SatelliteMetadata struct {
-	ID                      uint64 `json:"id"`
-	InitialSourceURL        string `json:"initialSourceURL"`
-	FrameCount              int    `json:"frameCount"`
-	LastFrameProcessed      int    `json:"lastFrameProcessed"`
-	OrginalResolutionWidth  int    `json:"orginalResolutionWidth"`
-	OrginalResolutionHeight int    `json:"orginalResolutionHeight"`
+	ID                uint64 `json:"id"`
+	InitialSourceURL  string `json:"initialSourceURL"`
+	ShouldBeProcessed bool   `json:"shouldBeProcessed"`
+
+	PullFromFeed struct {
+		WasCached bool `json:"wasCached"`
+		Bytes     int  `json:"bytes"`
+	} `json:"pullFromFeed"`
+
+	HiRez struct {
+		OrginalResolutionWidth  int `json:"orginalResolutionWidth"`
+		OrginalResolutionHeight int `json:"orginalResolutionHeight"`
+		FrameCount              int `json:"frameCount"`
+		LastFrameProcessed      int `json:"lastFrameProcessed"`
+	} `json:"hiRez"`
+
+	WebFriendly struct {
+		Width              int `json:"width"`
+		Height             int `json:"height"`
+		FrameCount         int `json:"frameCount"`
+		LastFrameProcessed int `json:"lastFrameProcessed"`
+	} `json:"webFriendly"`
+}
+
+type SatelliteMetadataStage struct {
+	Name               string
+	ProgressPercentage int
 }
 
 func MustSatelliteMetadataFromJSON(b []byte) *SatelliteMetadata {

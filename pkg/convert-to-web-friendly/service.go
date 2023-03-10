@@ -1,20 +1,14 @@
 package converttowebfriendly
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"image/jpeg"
 	"log"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
-	"github.com/anthonynsimon/bild/transform"
 	"github.com/cenkalti/backoff"
 	"github.com/nats-io/nats.go"
-	"golang.org/x/image/tiff"
 )
 
 func Run(ctx context.Context) error {
@@ -101,81 +95,81 @@ func Run(ctx context.Context) error {
 
 func convertToWebFriendly(
 	js nats.JetStreamContext, metadataKVStore nats.KeyValue, hirezObjectStore, webObjectStore nats.ObjectStore, highrezURL string) error {
-	buf, err := hirezObjectStore.GetBytes(highrezURL)
-	if err != nil {
-		return fmt.Errorf("can't get bytes from object store: %w", err)
-	}
-	r := bytes.NewReader(buf)
-	img, err := tiff.Decode(r)
-	if err != nil {
-		return fmt.Errorf("can't decode high resolution: %w", err)
-	}
+	// buf, err := hirezObjectStore.GetBytes(highrezURL)
+	// if err != nil {
+	// 	return fmt.Errorf("can't get bytes from object store: %w", err)
+	// }
+	// r := bytes.NewReader(buf)
+	// img, err := tiff.Decode(r)
+	// if err != nil {
+	// 	return fmt.Errorf("can't decode high resolution: %w", err)
+	// }
 
-	maxDimension := 2048
-	bounds := img.Bounds()
-	originalWidth, originalHeight := bounds.Dx(), bounds.Dy()
-	width, height := originalWidth, originalHeight
-	maxDimensionFloat, wf, hf := float64(maxDimension), float64(width), float64(height)
+	// maxDimension := 2048
+	// bounds := img.Bounds()
+	// originalWidth, originalHeight := bounds.Dx(), bounds.Dy()
+	// width, height := originalWidth, originalHeight
+	// maxDimensionFloat, wf, hf := float64(maxDimension), float64(width), float64(height)
 
-	if width > maxDimension {
-		width = maxDimension
-		height = int(hf * (maxDimensionFloat / wf))
-	} else if height > maxDimension {
-		height = maxDimension
-		width = int(wf * (maxDimensionFloat / hf))
-	}
-	if width != originalWidth || height != originalHeight {
-		img = transform.Resize(img, width, height, transform.Lanczos)
-	}
+	// if width > maxDimension {
+	// 	width = maxDimension
+	// 	height = int(hf * (maxDimensionFloat / wf))
+	// } else if height > maxDimension {
+	// 	height = maxDimension
+	// 	width = int(wf * (maxDimensionFloat / hf))
+	// }
+	// if width != originalWidth || height != originalHeight {
+	// 	img = transform.Resize(img, width, height, transform.Lanczos)
+	// }
 
-	webPngBuf := &bytes.Buffer{}
-	if err := jpeg.Encode(webPngBuf, img, nil); err != nil {
-		return fmt.Errorf("can't encode png: %w", err)
-	}
-	if _, err := webObjectStore.PutBytes(highrezURL+"_full", webPngBuf.Bytes()); err != nil {
-		return fmt.Errorf("can't publish to subject: %w", err)
-	}
+	// webPngBuf := &bytes.Buffer{}
+	// if err := jpeg.Encode(webPngBuf, img, nil); err != nil {
+	// 	return fmt.Errorf("can't encode png: %w", err)
+	// }
+	// if _, err := webObjectStore.PutBytes(highrezURL+"_full", webPngBuf.Bytes()); err != nil {
+	// 	return fmt.Errorf("can't publish to subject: %w", err)
+	// }
 
-	maxDimension, ratio := 512, wf/hf
-	maxDimensionFloat = float64(maxDimension)
+	// maxDimension, ratio := 512, wf/hf
+	// maxDimensionFloat = float64(maxDimension)
 
-	var thumbnailWidth, thumbnailHeight int
-	if width > height {
-		thumbnailWidth = maxDimension
-		thumbnailHeight = int(maxDimensionFloat / ratio)
-	} else {
-		thumbnailWidth = int(maxDimensionFloat / ratio)
-		thumbnailHeight = maxDimension
-	}
+	// var thumbnailWidth, thumbnailHeight int
+	// if width > height {
+	// 	thumbnailWidth = maxDimension
+	// 	thumbnailHeight = int(maxDimensionFloat / ratio)
+	// } else {
+	// 	thumbnailWidth = int(maxDimensionFloat / ratio)
+	// 	thumbnailHeight = maxDimension
+	// }
 
-	thumbnail := transform.Resize(img, thumbnailWidth, thumbnailHeight, transform.Lanczos)
-	thumbnailBuf := &bytes.Buffer{}
-	if err := jpeg.Encode(thumbnailBuf, thumbnail, nil); err != nil {
-		return fmt.Errorf("can't encode png: %w", err)
-	}
-	if _, err := webObjectStore.PutBytes(highrezURL+"_thumbnail", thumbnailBuf.Bytes()); err != nil {
-		return fmt.Errorf("can't publish to subject: %w", err)
-	}
+	// thumbnail := transform.Resize(img, thumbnailWidth, thumbnailHeight, transform.Lanczos)
+	// thumbnailBuf := &bytes.Buffer{}
+	// if err := jpeg.Encode(thumbnailBuf, thumbnail, nil); err != nil {
+	// 	return fmt.Errorf("can't encode png: %w", err)
+	// }
+	// if _, err := webObjectStore.PutBytes(highrezURL+"_thumbnail", thumbnailBuf.Bytes()); err != nil {
+	// 	return fmt.Errorf("can't publish to subject: %w", err)
+	// }
 
-	parts := strings.Split(highrezURL, "_")
-	videoFeedID := parts[0]
-	frameRaw := parts[1]
-	frame, err := strconv.Atoi(frameRaw)
-	if err != nil {
-		return fmt.Errorf("can't convert frame to int: %w", err)
-	}
+	// parts := strings.Split(highrezURL, "_")
+	// videoFeedID := parts[0]
+	// frameRaw := parts[1]
+	// frame, err := strconv.Atoi(frameRaw)
+	// if err != nil {
+	// 	return fmt.Errorf("can't convert frame to int: %w", err)
+	// }
 
-	entry, err := metadataKVStore.Get(videoFeedID)
-	if err != nil {
-		return fmt.Errorf("can't get metadata from key value store: %w", err)
-	}
-	metadata := shared.MustSatelliteMetadataFromJSON(entry.Value())
-	metadata.LastFrameProcessed = frame
-	if _, err := metadataKVStore.Put(videoFeedID, metadata.MustToJSON()); err != nil {
-		return fmt.Errorf("can't put metadata to key value store: %w", err)
-	}
+	// entry, err := metadataKVStore.Get(videoFeedID)
+	// if err != nil {
+	// 	return fmt.Errorf("can't get metadata from key value store: %w", err)
+	// }
+	// metadata := shared.MustSatelliteMetadataFromJSON(entry.Value())
+	// metadata.LastFrameProcessed = frame
+	// if _, err := metadataKVStore.Put(videoFeedID, metadata.MustToJSON()); err != nil {
+	// 	return fmt.Errorf("can't put metadata to key value store: %w", err)
+	// }
 
-	log.Printf("Converted %s to web friendly images %dx%d and %dx%d", highrezURL, width, height, thumbnailWidth, thumbnailHeight)
+	// log.Printf("Converted %s to web friendly images %dx%d and %dx%d", highrezURL, width, height, thumbnailWidth, thumbnailHeight)
 
 	return nil
 }
