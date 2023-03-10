@@ -12,6 +12,7 @@ import (
 	satelliteimageryhirez "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-hirez"
 	satelliteimagerymetadata "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-metadata"
 	satelliteimagerypullfeeds "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-pull-feeds"
+	satelliteimagerywebfriendly "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-web-friendly"
 	"golang.org/x/sync/errgroup"
 
 	_ "net/http/pprof"
@@ -81,11 +82,11 @@ func run(ctx context.Context) error {
 		})
 	}
 
-	// if stage == 0 || stage == 3 {
-	// 	eg.Go(func() error {
-	// 		return converttowebfriendly.Run(setupCtx)
-	// 	})
-	// }
+	if stage == "all" || stage == "imagery" || stage == "imagery-web-friendly" {
+		eg.Go(func() error {
+			return satelliteimagerywebfriendly.Run(setupCtx)
+		})
+	}
 
 	// if stage == 0 || stage == 4 {
 	// 	eg.Go(func() error {

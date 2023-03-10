@@ -3,7 +3,21 @@
     data-theme="synadia"
     class="scrollbar-thin scrollbar-thumb-primary scrollbar-track-secondary"
   >
-    <router-view class="min-h-screen" />
+    <RouterView class="min-h-screen" v-slot="{ Component }">
+      <template v-if="Component">
+        <Transition mode="out-in">
+          <KeepAlive>
+            <Suspense>
+              <!-- main content -->
+              <component :is="Component"></component>
+
+              <!-- loading state -->
+              <template #fallback> Loading... </template>
+            </Suspense>
+          </KeepAlive>
+        </Transition>
+      </template>
+    </RouterView>
   </div>
 </template>
 

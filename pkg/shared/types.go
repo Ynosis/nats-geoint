@@ -22,6 +22,8 @@ type SatelliteMetadata struct {
 	WebFriendly struct {
 		Width              int `json:"width"`
 		Height             int `json:"height"`
+		ThumbnailWidth     int `json:"thumbnailWidth"`
+		ThumbnailHeight    int `json:"thumbnailHeight"`
 		FrameCount         int `json:"frameCount"`
 		LastFrameProcessed int `json:"lastFrameProcessed"`
 	} `json:"webFriendly"`
