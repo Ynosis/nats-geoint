@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
 	"github.com/cespare/xxhash/v2"
@@ -12,16 +13,16 @@ import (
 
 // Make sure that there is metadata we can use to pull data from satellites
 func Run(ctx context.Context) error {
+	log.Printf("starting satellite imagery metadata service")
+	defer log.Printf("exiting satellite imagery metadata service")
+
 	nc := shared.NewNATsClient(ctx)
 
 	js, err := nc.JetStream()
 	if err != nil {
 		return fmt.Errorf("can't create JetStream context: %w", err)
 	}
-	kvMetadata, err := js.CreateKeyValue(&nats.KeyValueConfig{
-		Bucket:  shared.KEY_VALUE_STORE_BUCKET_SATELLITE_METADATA,
-		Storage: nats.FileStorage,
-	})
+	kvMetadata, err := js.KeyValue(shared.KEY_VALUE_STORE_BUCKET_SATELLITE_METADATA)
 	if err != nil {
 		return fmt.Errorf("can't create kv metadata: %w", err)
 	}
@@ -38,9 +39,9 @@ func Run(ctx context.Context) error {
 		// No metadata, let's get some
 		// from https://developers.google.com/earth-engine/timelapse/videos"
 		videoURLs := []string{
-			// "https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/3d/label/lake-mead.mp4",
-			// "https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/3d/label/beijing-capital-international-airport-beijing-china.mp4",
-			// "https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/3d/label/columbia-glacier-alaska.mp4",
+			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/lake-mead.mp4",
+			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/beijing-capital-international-airport-beijing-china.mp4",
+			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/columbia-glacier-alaska.mp4",
 			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/vegas.mp4",
 		}
 
@@ -56,6 +57,7 @@ func Run(ctx context.Context) error {
 				return fmt.Errorf("can't put metadata into kv store: %w", err)
 			}
 
+			log.Printf("added metadata for %s", videoURL)
 		}
 	}
 

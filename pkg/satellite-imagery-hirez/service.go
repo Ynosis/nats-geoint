@@ -19,6 +19,8 @@ import (
 )
 
 func Run(ctx context.Context, tmpDir string) error {
+	log.Printf("starting satellite-imagery-hirez service")
+	defer log.Printf("exiting satellite-imagery-hirez service")
 
 	nc := shared.NewNATsClient(ctx)
 
@@ -27,41 +29,19 @@ func Run(ctx context.Context, tmpDir string) error {
 		return fmt.Errorf("can't create JetStream context: %w", err)
 	}
 
-	b := backoff.NewExponentialBackOff()
+	rawObjectStore, err := js.ObjectStore(shared.OBJECT_STORE_BUCKET_RAW_DATA_FROM_SATELLITES)
+	if err != nil {
+		return fmt.Errorf("can't create object store raw from satellites context: %w", err)
 
-	var rawObjectStore, hirezObjectStore nats.ObjectStore
-	for rawObjectStore == nil || err != nil {
-		rawObjectStore, err = js.ObjectStore(shared.OBJECT_STORE_BUCKET_RAW_DATA_FROM_SATELLITES)
-		if err != nil {
-			d := b.NextBackOff()
-			log.Printf("can't get object store context: %v, retrying in %v", err, d)
-			time.Sleep(d)
-		}
 	}
-	b.Reset()
-	for hirezObjectStore == nil || err != nil {
-		hirezObjectStore, err = js.CreateObjectStore(&nats.ObjectStoreConfig{
-			Bucket:      shared.OBJECT_STORE_BUCKET_HIREZ_FROM_SATELLITES,
-			Description: "TIFFs converted from raw data",
-		})
-		if err != nil {
-			d := b.NextBackOff()
-			log.Printf("can't create object store context: %v, retrying in %v", err, d)
-			time.Sleep(d)
-		}
+	hirezObjectStore, err := js.ObjectStore(shared.OBJECT_STORE_BUCKET_HIREZ_FROM_SATELLITES)
+	if err != nil {
+		return fmt.Errorf("can't create object store hi rez from satellites context: %w", err)
 	}
-	b.Reset()
-
-	var metadataKVStore nats.KeyValue
-	for metadataKVStore == nil || err != nil {
-		metadataKVStore, err = js.KeyValue(shared.KEY_VALUE_STORE_BUCKET_SATELLITE_METADATA)
-		if err != nil {
-			d := b.NextBackOff()
-			log.Printf("can't create key value store context: %v, retrying in %v", err, d)
-			time.Sleep(d)
-		}
+	metadataKVStore, err := js.KeyValue(shared.KEY_VALUE_STORE_BUCKET_SATELLITE_METADATA)
+	if err != nil {
+		return fmt.Errorf("can't create kv metadata context: %w", err)
 	}
-	b.Reset()
 
 	sub, err := js.PullSubscribe(
 		shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_HIREZ, "convert_to_hirez",
@@ -71,16 +51,16 @@ func Run(ctx context.Context, tmpDir string) error {
 		return fmt.Errorf("can't subscribe to subject: %w", err)
 	}
 
-	ci, err := js.ConsumerInfo("SATELLITE_JOBS", "convert_to_hirez")
-	if err != nil {
-		return fmt.Errorf("can't create consumer: %w", err)
-	}
-	if ci.Config.AckWait != 5*time.Minute {
-		ci.Config.AckWait = 5 * time.Minute
-		if _, err := js.UpdateConsumer(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_HIREZ, &ci.Config); err != nil {
-			return fmt.Errorf("can't update consumer: %w", err)
-		}
-	}
+	// ci, err := js.ConsumerInfo("SATELLITE_JOBS", "convert_to_hirez")
+	// if err != nil {
+	// 	return fmt.Errorf("can't create consumer: %w", err)
+	// }
+	// if ci.Config.AckWait != 5*time.Minute {
+	// 	ci.Config.AckWait = 5 * time.Minute
+	// 	if _, err := js.UpdateConsumer(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_HIREZ, &ci.Config); err != nil {
+	// 		return fmt.Errorf("can't update consumer: %w", err)
+	// 	}
+	// }
 
 	hiRezTmpDir := filepath.Join(tmpDir, "hi_rez")
 	if err := os.MkdirAll(hiRezTmpDir, 0755); err != nil {
@@ -109,8 +89,8 @@ func Run(ctx context.Context, tmpDir string) error {
 		defer os.RemoveAll(hiRezImagesDir)
 
 		rawCMD := fmt.Sprintf(
-			// `ffmpeg -i %s -pix_fmt rgb24 -compression_algo lzw -v info -filter:v scale=2048:-1 %s/%%05d.tif`,
-			`ffmpeg -i %s -pix_fmt rgb24 -compression_algo lzw -v info %s/%%05d.tif`,
+			`ffmpeg -i %s -pix_fmt rgb24 -compression_algo lzw -v info -filter:v scale=2048:-1 %s/%%05d.tif`,
+			// `ffmpeg -i %s -pix_fmt rgb24 -compression_algo lzw -v info %s/%%05d.tif`,
 			feedFile, hiRezImagesDir,
 		)
 		log.Printf("Running command: %s", rawCMD)
@@ -228,6 +208,7 @@ func Run(ctx context.Context, tmpDir string) error {
 		return nil
 	}
 
+	b := backoff.NewExponentialBackOff()
 	for {
 		select {
 		case <-ctx.Done():

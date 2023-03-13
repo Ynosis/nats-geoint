@@ -12,19 +12,24 @@
 
 <template>
   <div>
-    <div class="navbar bg-base-300">
+    <div
+      class="sticky flex items-center justify-between w-full shadow-inner bg-base-300"
+    >
       <label
         for="side-drawer"
         class="btn btn-sm btn-ghost drawer-button lg:hidden"
       >
         <icon-material-symbols:more-vert />
       </label>
-      <div class="flex-1">
-        <div class="flex items-baseline gap-1">
-          <icon-noto:satellite-antenna class="text-xl" />
-          <a class="text-2xl normal-case">Satellite Demo</a>
-        </div>
+      <div>
+        <router-link to="/" class="btn btn-ghost">
+          <div class="flex items-baseline gap-1">
+            <icon-noto:satellite-antenna class="text-xl" />
+            <a class="text-2xl normal-case">Satellite Demo</a>
+          </div>
+        </router-link>
       </div>
+      <div class="font-mono text-xl font-bold">#justusenats</div>
       <div>
         <img class="h-4" :src="logoURL" />
       </div>
@@ -41,7 +46,7 @@
           <!-- Sidebar content here -->
           <li>
             <router-link
-              to="imagery"
+              to="/demo/imagery"
               :class="{ active: routeStartsWith('demo-imagery') }"
             >
               <icon-entypo:images />
@@ -50,7 +55,7 @@
           </li>
           <li>
             <router-link
-              to="telemetry"
+              to="/demo/telemetry"
               :class="{ active: routeStartsWith('demo-telemetry') }"
             >
               <icon-uil:location-arrow />

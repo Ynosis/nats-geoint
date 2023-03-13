@@ -19,10 +19,9 @@
     suffix: string,
   ) => {
     const path = `${m.id}_${frame.toString().padStart(5, '0')}_${suffix}`
-    console.log(path)
     const res = await webImageStore.get(path)
     if (!res?.data) {
-      console.error(`no data for ${path}`)
+      // console.error(`no data for ${path}`)
       return
     }
 
@@ -70,12 +69,13 @@
   const currentFrames = ref<
     { thumbnail: number; left: number; right: number }[]
   >([])
+
   const thumbnailButtonFrames = computed(() => {
     return metadatas.value.map((metadata, i) => {
       const frameOffset = currentFrames.value[i].thumbnail
       if (!frameOffset) return
 
-      const count = 3
+      const count = 5
       const offsets: number[] = []
       for (let i = frameOffset - count; i <= frameOffset + count; i++) {
         if (i < 1) continue
@@ -142,12 +142,6 @@
       } else {
         metadatas.value[i] = m
       }
-
-      metadatas.value.sort((a, b) => {
-        if (a.shouldBeProcessed && !b.shouldBeProcessed) return -1
-        if (!a.shouldBeProcessed && b.shouldBeProcessed) return 1
-        return a.initialSourceURL.localeCompare(b.initialSourceURL)
-      })
     }
   })
 
@@ -213,7 +207,7 @@
     <template #default>
       <div>
         <div class="text-xl uppercase text-bold">Imagery from timelapse</div>
-        <div>
+        <div class="flex flex-col gap-6">
           <div
             class="shadow-lg card bg-base-100"
             v-for="(m, i) in metadatas"
@@ -238,31 +232,41 @@
                   :options="{ theme: 'dark' }"
                 />
               </div>
-              <div class="divider" />
-              <div class="flex flex-col items-center gap-2">
-                <div class="flex items-end gap-4">
-                  <button
-                    class="btn btn-primary btn-xl"
-                    @click="setLeftFrame(i)"
-                  >
-                    <icon-mdi:arrow-down-left /> Set Left
-                    {{ currentFrames[i].left }}
-                  </button>
-                  <img
-                    class="object-contain shadow-2xl rounded-xl ring-2 ring-primary"
-                    :src="thumbnailImageURLs[i]"
-                  />
-                  <button
-                    class="btn btn-primary btn-xl"
-                    @click="setRightFrame(i)"
-                  >
-                    <icon-mdi:arrow-down-right /> Set Right
-                    {{ currentFrames[i].right }}
-                  </button>
-                </div>
-                <div class="flex gap-2">
-                  <div v-for="tf in thumbnailButtonFrames[i]">
+              <div
+                v-if="m.shouldBeProcessed && m.webFriendly.frameCount"
+                class="flex flex-col gap-4"
+              >
+                <div class="divider">Compare</div>
+                <div class="flex flex-col items-center gap-2">
+                  <div class="flex items-end gap-4">
                     <button
+                      class="btn btn-primary btn-xl"
+                      @click="setLeftFrame(i)"
+                    >
+                      <icon-mdi:arrow-down-left /> Set Left
+                      {{ currentFrames[i].left }}
+                    </button>
+                    <img
+                      class="object-contain shadow-2xl select-none rounded-xl ring-2 ring-primary"
+                      :src="thumbnailImageURLs[i]"
+                    />
+                    <button
+                      class="btn btn-primary btn-xl"
+                      @click="setRightFrame(i)"
+                    >
+                      <icon-mdi:arrow-down-right /> Set Right
+                      {{ currentFrames[i].right }}
+                    </button>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      class="btn btn-ghost btn-sm"
+                      @click="currentFrames[i].thumbnail = 1"
+                    >
+                      <icon-material-symbols:keyboard-double-arrow-left />
+                    </button>
+                    <button
+                      v-for="tf in thumbnailButtonFrames[i]"
                       class="btn"
                       :class="{
                         'btn-primary': tf === currentFrames[i].thumbnail,
@@ -272,18 +276,27 @@
                     >
                       {{ tf }}
                     </button>
+                    <button
+                      class="btn btn-ghost btn-sm"
+                      @click="
+                        currentFrames[i].thumbnail =
+                          m.webFriendly.lastFrameProcessed
+                      "
+                    >
+                      <icon-material-symbols:keyboard-double-arrow-right />
+                    </button>
                   </div>
                 </div>
+                <div class="rounded-xl">
+                  <image-compare
+                    :full="false"
+                    :padding="{ left: 20, right: 20 }"
+                    :after="compareImageURLs[i].leftURL"
+                    :before="compareImageURLs[i].rightURL"
+                  />
+                </div>
+                <div class="divider" />
               </div>
-              <div class="rounded-xl">
-                <image-compare
-                  :full="false"
-                  :padding="{ left: 20, right: 20 }"
-                  :after="compareImageURLs[i].leftURL"
-                  :before="compareImageURLs[i].rightURL"
-                />
-              </div>
-              <div class="divider" />
               <div class="justify-end card-actions">
                 <button
                   v-if="m.shouldBeProcessed"
@@ -293,7 +306,11 @@
                   <icon-mdi:delete />
                   Remove processed
                 </button>
-                <button v-else class="btn btn-success" @click="startProcess(m)">
+                <button
+                  v-else
+                  class="btn btn-success btn-xs"
+                  @click="startProcess(m)"
+                >
                   <icon-mdi:check />
                   Start Process
                 </button>
@@ -301,8 +318,6 @@
             </div>
           </div>
         </div>
-
-        {{ metadatas }}
       </div>
     </template>
   </Suspense>

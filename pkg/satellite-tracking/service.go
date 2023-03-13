@@ -43,6 +43,7 @@ type position struct {
 }
 
 func Run(ctx context.Context) error {
+	time.Sleep(1 * time.Second)
 	metadata := []satelliteMetadata{}
 	if err := json.Unmarshal([]byte(activeJSON), &metadata); err != nil {
 		return fmt.Errorf("can't unmarshal active.json: %w", err)
@@ -104,11 +105,11 @@ func Run(ctx context.Context) error {
 
 	satTrackingSubjectPrefix := "sat.tracking"
 
-	maxMsgsPerSubject := int64(10)
+	maxMsgsPerSubject := int64(8000)
 	line := charts.NewLine()
 	line.SetGlobalOptions(charts.WithTitleOpts(opts.Title{
 		Title:    "Satallite Tracking",
-		Subtitle: fmt.Sprintf("Max %d messages per subject", maxMsgsPerSubject),
+		Subtitle: fmt.Sprintf("Max %d messages per subject, multi subject", maxMsgsPerSubject),
 	}))
 
 	if err := js.DeleteStream("SatalliteTracking"); err != nil && err != nats.ErrStreamNotFound {
@@ -160,7 +161,8 @@ done:
 				p.AltitudeKm = math.Abs(alt)
 				b, _ := json.Marshal(p)
 				// log.Print(len(b))
-				subject := fmt.Sprintf("%s.%s", satTrackingSubjectPrefix, s.ID)
+				// subject := fmt.Sprintf("%s.%s", satTrackingSubjectPrefix, s.ID)
+				subject := fmt.Sprintf("%s.sats", satTrackingSubjectPrefix) // For @derek
 
 				if _, err := js.PublishAsync(subject, b); err != nil {
 					return fmt.Errorf("can't publish: %w", err)
@@ -168,7 +170,7 @@ done:
 			}
 
 			took := time.Since(now)
-			latencies = append(latencies, opts.LineData{Value: took.Seconds()})
+			latencies = append(latencies, opts.LineData{Value: took.Milliseconds()})
 			// totalMessages = append(totalMessages, opts.LineData{Value: len(satallites)})
 			count = append(count, len(latencies))
 
@@ -178,7 +180,6 @@ done:
 				break done
 			}
 		}
-
 	}
 
 	line.AddSeries("update times", latencies)

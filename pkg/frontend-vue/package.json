@@ -18,6 +18,7 @@
     "json-bigint": "^1.0.0",
     "mermaid": "^10.0.2",
     "nats.ws": "^1.14.0",
+    "ol": "^7.3.0",
     "vue": "^3.2.47",
     "vue-mermaid-render": "^0.0.3",
     "vue-mermaid-string": "^4.0.3",

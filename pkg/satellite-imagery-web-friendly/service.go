@@ -12,12 +12,14 @@ import (
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
 	"github.com/anthonynsimon/bild/transform"
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/nats-io/nats.go"
 	"golang.org/x/image/tiff"
 )
 
 func Run(ctx context.Context) error {
+	log.Printf("starting satellite-imagery-web-friendly service")
+	defer log.Printf("exiting satellite-imagery-web-friendly service")
 
 	nc := shared.NewNATsClient(ctx)
 
@@ -26,36 +28,21 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("can't create JetStream context: %w", err)
 	}
 
-	b := backoff.NewExponentialBackOff()
+	// b := backoff.NewExponentialBackOff()
 
-	var metadataKVStore nats.KeyValue
-	for metadataKVStore == nil || err != nil {
-		metadataKVStore, err = js.KeyValue(shared.KEY_VALUE_STORE_BUCKET_SATELLITE_METADATA)
-		if err != nil {
-			log.Printf("can't create key value store context: %v", err)
-			time.Sleep(b.NextBackOff())
-		}
+	metadataKVStore, err := js.KeyValue(shared.KEY_VALUE_STORE_BUCKET_SATELLITE_METADATA)
+	if err != nil {
+		return fmt.Errorf("can't create key value store metadata context: %w", err)
 	}
-	b.Reset()
 
-	var highrezObjectStore, webObjectStore nats.ObjectStore
-	for highrezObjectStore == nil || err != nil {
-		highrezObjectStore, err = js.ObjectStore(shared.OBJECT_STORE_BUCKET_HIREZ_FROM_SATELLITES)
-		if err != nil {
-			// log.Printf("can't create object store context: %v", err)
-			time.Sleep(b.NextBackOff())
-		}
+	highrezObjectStore, err := js.ObjectStore(shared.OBJECT_STORE_BUCKET_HIREZ_FROM_SATELLITES)
+	if err != nil {
+		return fmt.Errorf("can't create object store hirez context: %w", err)
 	}
-	b.Reset()
 
-	for webObjectStore == nil || err != nil {
-		webObjectStore, err = js.CreateObjectStore(&nats.ObjectStoreConfig{
-			Bucket:      shared.OBJECT_STORE_BUCKET_WEB_FRIENDLY_IMAGES,
-			Description: "Web friendly images converted from Hi Rez images",
-		})
-		if err != nil {
-			return fmt.Errorf("can't create object store context: %w", err)
-		}
+	webObjectStore, err := js.ObjectStore(shared.OBJECT_STORE_BUCKET_WEB_FRIENDLY_IMAGES)
+	if err != nil {
+		return fmt.Errorf("can't create object store web friendly context: %w", err)
 	}
 
 	sub, err := js.PullSubscribe(
@@ -151,6 +138,7 @@ func Run(ctx context.Context) error {
 		return nil
 	}
 
+	b := backoff.NewExponentialBackOff()
 	for {
 		select {
 		case <-ctx.Done():

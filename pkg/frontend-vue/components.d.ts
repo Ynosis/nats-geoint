@@ -9,9 +9,13 @@ declare module '@vue/runtime-core' {
   export interface GlobalComponents {
     AppHeader: typeof import('./src/components/AppHeader.vue')['default']
     'IconEntypo:images': typeof import('~icons/entypo/images')['default']
+    'IconMaterialSymbols:keyboardDoubleArrowLeft': typeof import('~icons/material-symbols/keyboard-double-arrow-left')['default']
+    'IconMaterialSymbols:keyboardDoubleArrowRight': typeof import('~icons/material-symbols/keyboard-double-arrow-right')['default']
     'IconMaterialSymbols:moreVert': typeof import('~icons/material-symbols/more-vert')['default']
     'IconMdi:arrowDownLeft': typeof import('~icons/mdi/arrow-down-left')['default']
     'IconMdi:arrowDownRight': typeof import('~icons/mdi/arrow-down-right')['default']
+    'IconMdi:arrowLeft': typeof import('~icons/mdi/arrow-left')['default']
+    'IconMdi:arrowRight': typeof import('~icons/mdi/arrow-right')['default']
     'IconMdi:check': typeof import('~icons/mdi/check')['default']
     'IconMdi:delete': typeof import('~icons/mdi/delete')['default']
     'IconNoto:satelliteAntenna': typeof import('~icons/noto/satellite-antenna')['default']

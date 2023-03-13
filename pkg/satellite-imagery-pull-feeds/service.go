@@ -14,6 +14,9 @@ import (
 )
 
 func Run(ctx context.Context, tmpDir string) error {
+	log.Printf("starting satellite-imagery-pull-feeds service")
+	defer log.Printf("exiting satellite-imagery-pull-feeds service")
+
 	nc := shared.NewNATsClient(ctx)
 
 	js, err := nc.JetStream()
@@ -35,13 +38,7 @@ func Run(ctx context.Context, tmpDir string) error {
 
 	rawDataStore, err := js.ObjectStore(shared.OBJECT_STORE_BUCKET_RAW_DATA_FROM_SATELLITES)
 	if err != nil {
-		rawDataStore, err = js.CreateObjectStore(&nats.ObjectStoreConfig{
-			Bucket:      shared.OBJECT_STORE_BUCKET_RAW_DATA_FROM_SATELLITES,
-			Description: "Raw data from satellites, faked with mp4 files for now",
-		})
-		if err != nil {
-			log.Printf("can't create object store context: %v", err)
-		}
+		log.Printf("can't create object store context: %v", err)
 	}
 
 	pullDataTmpDir := filepath.Join(tmpDir, "pull_feeds")

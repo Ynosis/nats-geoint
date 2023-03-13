@@ -3,6 +3,7 @@ package embeddednats
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/nats-io/nats-server/v2/server"
@@ -12,11 +13,18 @@ type NATsEmbeddedNATsServer struct {
 	ns *server.Server
 }
 
-func NewNatsEmbeddedNATsServer(ctx context.Context) (*NATsEmbeddedNATsServer, error) {
+func NewNatsEmbeddedNATsServer(ctx context.Context, clearData bool) (*NATsEmbeddedNATsServer, error) {
+	const dataDir = "./data/microlith-data"
+	if clearData {
+		if err := os.RemoveAll(dataDir); err != nil {
+			return nil, err
+		}
+	}
+
 	// Initialize new server with options
 	ns, err := server.NewServer(&server.Options{
 		JetStream: true,
-		StoreDir:  "./data/microlith-data",
+		StoreDir:  dataDir,
 		Websocket: server.WebsocketOpts{
 			Port:  4443,
 			NoTLS: true,
