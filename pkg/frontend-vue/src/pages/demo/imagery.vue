@@ -3,12 +3,14 @@
   import {
     decodeFromBuf,
     encodeToBuf,
+    natsClient,
     natsKVClient,
     natsObjectStoreClient,
   } from '@/shared/nats'
   import VueMermaidString from 'vue-mermaid-string'
 
-  const [metadataKV, webImageStore] = await Promise.all([
+  const [nc, metadataKV, webImageStore] = await Promise.all([
+    natsClient(),
     natsKVClient('satellite-metadata'),
     natsObjectStoreClient('web-friendly-images'),
   ])
@@ -42,7 +44,7 @@
   }
 
   interface SatelliteMetadata {
-    id: number
+    id: bigint
     initialSourceURL: string
     shouldBeProcessed: boolean
     pullFromFeed: {
@@ -102,10 +104,51 @@
   }, [])
 
   const setLeftFrame = (i: number) => {
-    currentFrames.value[i].left = currentFrames.value[i].thumbnail
+    const currentFrame = currentFrames.value[i]
+    currentFrame.left = currentFrame.thumbnail
+
+    const videoFeedID = metadatas.value[i].id
+    updateDiff(videoFeedID, currentFrame.left, currentFrame.right)
   }
+
   const setRightFrame = (i: number) => {
-    currentFrames.value[i].right = currentFrames.value[i].thumbnail
+    const currentFrame = currentFrames.value[i]
+    currentFrame.right = currentFrame.thumbnail
+
+    const videoFeedID = metadatas.value[i].id
+    updateDiff(videoFeedID, currentFrame.left, currentFrame.right)
+  }
+
+  interface SatelliteImageryDiffSuccessResponse {
+    averageDistance: number
+    differenceDistance: number
+    perceptionDistance: number
+  }
+
+  interface SatelliteImageryDiffResponse {
+    error: string
+    success: SatelliteImageryDiffSuccessResponse
+  }
+
+  const diffStats = ref<SatelliteImageryDiffSuccessResponse>({
+    averageDistance: 0,
+    differenceDistance: 0,
+    perceptionDistance: 0,
+  })
+  const updateDiff = async (
+    videoFeedID: BigInt,
+    startFrame: number,
+    endFrame: number,
+  ) => {
+    const encoded = encodeToBuf({ videoFeedID, startFrame, endFrame })
+    const msg = await nc.request('satellite-imagery-diff', encoded)
+    const res = decodeFromBuf<SatelliteImageryDiffResponse>(msg.data)
+
+    if (res.error) {
+      console.error(res.error)
+    }
+
+    diffStats.value = res.success
   }
 
   const compareImageURLs = computedAsync(async () => {
@@ -232,6 +275,7 @@
                   :options="{ theme: 'dark' }"
                 />
               </div>
+
               <div
                 v-if="m.shouldBeProcessed && m.webFriendly.frameCount"
                 class="flex flex-col gap-4"
@@ -295,6 +339,49 @@
                     :before="compareImageURLs[i].rightURL"
                   />
                 </div>
+                <table class="table table-compact">
+                  <caption>
+                    Difference Scores
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th class="">Type</th>
+                      <th>Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <th>Average</th>
+                      <td
+                        :class="{
+                          'text-error': diffStats.averageDistance > 5,
+                        }"
+                      >
+                        {{ diffStats.averageDistance }}
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Difference</th>
+                      <td
+                        :class="{
+                          'text-error': diffStats.differenceDistance > 5,
+                        }"
+                      >
+                        {{ diffStats.differenceDistance }}
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Perception</th>
+                      <td
+                        :class="{
+                          'text-error': diffStats.perceptionDistance > 5,
+                        }"
+                      >
+                        {{ diffStats.perceptionDistance }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
                 <div class="divider" />
               </div>
               <div class="justify-end card-actions">

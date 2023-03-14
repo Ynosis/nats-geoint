@@ -1,6 +1,10 @@
 package shared
 
-import "encoding/json"
+import (
+	"fmt"
+
+	"github.com/goccy/go-json"
+)
 
 type SatelliteMetadata struct {
 	ID                uint64 `json:"id"`
@@ -44,6 +48,39 @@ func MustSatelliteMetadataFromJSON(b []byte) *SatelliteMetadata {
 
 func (s *SatelliteMetadata) MustToJSON() []byte {
 	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+type SatelliteImageryDiffRequest struct {
+	VideoFeedID uint64 `json:"videoFeedID"`
+	StartFrame  int    `json:"startFrame"`
+	EndFrame    int    `json:"endFrame"`
+}
+
+func SatelliteImageryDiffRequestFromJSON(b []byte) (*SatelliteImageryDiffRequest, error) {
+	s := &SatelliteImageryDiffRequest{}
+	if err := json.Unmarshal(b, s); err != nil {
+		return nil, fmt.Errorf("can't unmarshal satellite imagery diff request: %w", err)
+	}
+	return s, nil
+}
+
+type SatelliteImageryDiffSuccessResponse struct {
+	AverageDistance    int `json:"averageDistance"`
+	DifferenceDistance int `json:"differenceDistance"`
+	PerceptionDistance int `json:"perceptionDistance"`
+}
+
+type SatelliteImageryDiffResponse struct {
+	Error   string                              `json:"error"`
+	Success SatelliteImageryDiffSuccessResponse `json:"success"`
+}
+
+func (res *SatelliteImageryDiffResponse) MustToJSON() []byte {
+	b, err := json.Marshal(res)
 	if err != nil {
 		panic(err)
 	}
