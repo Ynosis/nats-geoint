@@ -1,8 +1,10 @@
 package satelliteimageryhirez
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -89,24 +91,42 @@ func Run(ctx context.Context, tmpDir string) error {
 		defer os.RemoveAll(hiRezImagesDir)
 
 		rawCMD := fmt.Sprintf(
-			`ffmpeg -i %s -pix_fmt rgb24 -compression_algo lzw -v info -filter:v scale=2048:-1 %s/%%05d.tif`,
-			// `ffmpeg -i %s -pix_fmt rgb24 -compression_algo lzw -v info %s/%%05d.tif`,
+			// `ffmpeg -i %s -pix_fmt rgb24 -compression_algo lzw -v info -filter:v scale=2048:-1 %s/%%05d.tif`,
+			`ffmpeg -i %s -pix_fmt rgb24 -compression_algo lzw -v info %s/%%05d.tif`,
 			feedFile, hiRezImagesDir,
 		)
 		log.Printf("Running command: %s", rawCMD)
 		rawCMDParts := strings.Split(rawCMD, " ")
 		cmd := exec.Command(rawCMDParts[0], rawCMDParts[1:]...)
-		// cmd.Stdout = os.Stdout
-		// cmd.Stderr = os.Stderr
-		// if err := cmd.Run(); err != nil {
-		// 	return fmt.Errorf("can't convert raw bytes to hirez: %w", err)
-		// }
-		output, err := cmd.CombinedOutput()
-		if err != nil {
+
+		combinedBuffer := bytes.Buffer{}
+		mw := io.MultiWriter(os.Stdout, &combinedBuffer)
+		cmd.Stdout = mw
+		cmd.Stderr = mw
+
+		done := false
+		for !done {
+			line, err := combinedBuffer.ReadString('\n')
+			log.Printf("Line: %s", line)
+			if err != nil {
+				if done {
+					break
+				}
+				if err != io.EOF {
+					return fmt.Errorf("can't read line from ffmpeg output: %w", err)
+				}
+			}
+		}
+
+		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("can't convert raw bytes to hirez: %w", err)
 		}
+		done = true
+
 		// log.Printf("Output: %s", output)
 
+		combinedBuffer.Reset()
+		output := combinedBuffer.Bytes()
 		frameMatches := frameRegex.FindAllStringSubmatch(string(output), -1)
 		if len(frameMatches) == 0 {
 			return fmt.Errorf("can't find frame count in ffmpeg output")

@@ -123,6 +123,13 @@ func createStreams(ctx context.Context) error {
 		return fmt.Errorf("can't create JetStream context: %w", err)
 	}
 
+	if _, err := js.AddStream(&nats.StreamConfig{
+		Name:     "SATELLITE_JOBS",
+		Subjects: []string{shared.JETSTREAM_SATELLITE_JOBS + ".>"},
+	}); err != nil {
+		return fmt.Errorf("can't create stream: %w", err)
+	}
+
 	// Create NATs streams
 	type streamsInfo struct {
 		Bucket      string

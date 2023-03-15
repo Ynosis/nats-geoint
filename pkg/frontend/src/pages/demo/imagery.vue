@@ -341,7 +341,7 @@
                 </div>
                 <table class="table table-compact">
                   <caption>
-                    Difference Scores
+                    Image differencing scores
                   </caption>
                   <thead>
                     <tr>
@@ -353,6 +353,7 @@
                     <tr>
                       <th>Average</th>
                       <td
+                        class="text-xl font-bold"
                         :class="{
                           'text-error': diffStats.averageDistance > 5,
                         }"
@@ -363,6 +364,7 @@
                     <tr>
                       <th>Difference</th>
                       <td
+                        class="text-xl font-bold"
                         :class="{
                           'text-error': diffStats.differenceDistance > 5,
                         }"
@@ -373,6 +375,7 @@
                     <tr>
                       <th>Perception</th>
                       <td
+                        class="text-xl font-bold"
                         :class="{
                           'text-error': diffStats.perceptionDistance > 5,
                         }"
@@ -386,15 +389,7 @@
               </div>
               <div class="justify-end card-actions">
                 <button
-                  v-if="m.shouldBeProcessed"
-                  class="btn btn-error btn-xs"
-                  @click="removeProcess(m)"
-                >
-                  <icon-mdi:delete />
-                  Remove processed
-                </button>
-                <button
-                  v-else
+                  v-if="!m.shouldBeProcessed"
                   class="btn btn-success btn-xs"
                   @click="startProcess(m)"
                 >
