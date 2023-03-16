@@ -1,4 +1,5 @@
 <script setup lang="ts">
+  import { natsJetstreamClient } from '@/shared/nats'
   import Feature from 'ol/Feature'
   import { Point } from 'ol/geom'
   import TileLayer from 'ol/layer/Tile'
@@ -10,6 +11,8 @@
   import View from 'ol/View'
 
   const mapRef = ref<HTMLDivElement>()
+
+  const [js] = await Promise.all([natsJetstreamClient()])
 
   let map: Map
   onMounted(() => {
@@ -102,6 +105,11 @@
   onUnmounted(() => {
     map?.dispose()
   })
+
+  // onMounted(async()=> {
+  //   const sub = await js.pullSubscribe('sat.tracking.>', {    })
+
+  // }
 </script>
 
 <template>

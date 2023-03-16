@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"image/png"
 	"log"
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
 	"github.com/corona10/goimagehash"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/nats-io/nats.go"
-	"golang.org/x/image/tiff"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -81,9 +81,9 @@ func Run(ctx context.Context) error {
 				return nil, fmt.Errorf("can't get file: %w", err)
 			}
 			fileReader := bytes.NewReader(fileBytes)
-			hirez, err := tiff.Decode(fileReader)
+			hirez, err := png.Decode(fileReader)
 			if err != nil {
-				return nil, fmt.Errorf("can't decode tiff: %w", err)
+				return nil, fmt.Errorf("can't decode png: %w", err)
 			}
 
 			eg := errgroup.Group{}

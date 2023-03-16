@@ -1,23 +1,24 @@
 package satelliteimagerywebfriendly
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"image/jpeg"
 	"log"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
-	"github.com/anthonynsimon/bild/transform"
+	"github.com/Jeffail/gabs/v2"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/nats-io/nats.go"
-	"golang.org/x/image/tiff"
+	ffmpeg "github.com/u2takey/ffmpeg-go"
+	"golang.org/x/sync/errgroup"
 )
 
-func Run(ctx context.Context) error {
+func Run(ctx context.Context, tmpDir string) error {
 	log.Printf("starting satellite-imagery-web-friendly service")
 	defer log.Printf("exiting satellite-imagery-web-friendly service")
 
@@ -27,8 +28,6 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("can't create JetStream context: %w", err)
 	}
-
-	// b := backoff.NewExponentialBackOff()
 
 	metadataKVStore, err := js.KeyValue(shared.KEY_VALUE_STORE_BUCKET_SATELLITE_METADATA)
 	if err != nil {
@@ -53,61 +52,74 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("can't subscribe to subject: %w", err)
 	}
 
+	webFriendlyTmpDir := filepath.Join(tmpDir, "web_friendly")
+	if err := os.MkdirAll(webFriendlyTmpDir, 0755); err != nil {
+		return fmt.Errorf("can't create temp directory: %w", err)
+	}
+
 	convertToWebFriendly := func(highrezURL string) error {
-		buf, err := highrezObjectStore.GetBytes(highrezURL)
-		if err != nil {
+		hiRezPath := filepath.Join(webFriendlyTmpDir, highrezURL+".png")
+		if err := highrezObjectStore.GetFile(highrezURL, hiRezPath); err != nil {
 			return fmt.Errorf("can't get bytes from object store: %w", err)
 		}
-		r := bytes.NewReader(buf)
-		img, err := tiff.Decode(r)
-		if err != nil {
-			return fmt.Errorf("can't decode high resolution: %w", err)
-		}
 
-		maxDimension := 2048
-		bounds := img.Bounds()
-		originalWidth, originalHeight := bounds.Dx(), bounds.Dy()
-		width, height := originalWidth, originalHeight
-		maxDimensionFloat, wf, hf := float64(maxDimension), float64(width), float64(height)
+		const ext = ".jpg"
 
-		if width > maxDimension {
-			width = maxDimension
-			height = int(hf * (maxDimensionFloat / wf))
-		} else if height > maxDimension {
-			height = maxDimension
-			width = int(wf * (maxDimensionFloat / hf))
-		}
-		if width != originalWidth || height != originalHeight {
-			img = transform.Resize(img, width, height, transform.Lanczos)
-		}
+		eg := errgroup.Group{}
 
-		webPngBuf := &bytes.Buffer{}
-		if err := jpeg.Encode(webPngBuf, img, nil); err != nil {
-			return fmt.Errorf("can't encode png: %w", err)
-		}
-		if _, err := webObjectStore.PutBytes(highrezURL+"_full", webPngBuf.Bytes()); err != nil {
-			return fmt.Errorf("can't publish to subject: %w", err)
-		}
+		fullFilename := highrezURL + "_full"
+		fullPath := filepath.Join(webFriendlyTmpDir, fullFilename)
+		fullPathWithExt := fullPath + ext
+		eg.Go(func() error {
+			process := ffmpeg.Input(hiRezPath).
+				Output(fullPathWithExt, ffmpeg.KwArgs{
+					"filter:v": "scale=1024:-1",
+				}).
+				OverWriteOutput()
 
-		maxDimension, ratio := 512, wf/hf
-		maxDimensionFloat = float64(maxDimension)
+			if err := process.Run(); err != nil {
+				return fmt.Errorf("can't run ffmpeg: %w", err)
+			}
 
-		var thumbnailWidth, thumbnailHeight int
-		if width > height {
-			thumbnailWidth = maxDimension
-			thumbnailHeight = int(maxDimensionFloat / ratio)
-		} else {
-			thumbnailWidth = int(maxDimensionFloat / ratio)
-			thumbnailHeight = maxDimension
-		}
+			b, err := os.ReadFile(fullPathWithExt)
+			if err != nil {
+				return fmt.Errorf("can't read full path: %w", err)
+			}
+			if _, err := webObjectStore.PutBytes(fullFilename, b); err != nil {
+				return fmt.Errorf("can't publish to full path: %w", err)
+			}
 
-		thumbnail := transform.Resize(img, thumbnailWidth, thumbnailHeight, transform.Lanczos)
-		thumbnailBuf := &bytes.Buffer{}
-		if err := jpeg.Encode(thumbnailBuf, thumbnail, nil); err != nil {
-			return fmt.Errorf("can't encode png: %w", err)
-		}
-		if _, err := webObjectStore.PutBytes(highrezURL+"_thumbnail", thumbnailBuf.Bytes()); err != nil {
-			return fmt.Errorf("can't publish to subject: %w", err)
+			return nil
+		})
+
+		thumbnailFilename := highrezURL + "_thumbnail"
+		thumbnailPath := filepath.Join(webFriendlyTmpDir, thumbnailFilename)
+		thumbnailPathWithExt := thumbnailPath + ext
+		eg.Go(func() error {
+			process := ffmpeg.Input(hiRezPath).
+				Output(thumbnailPathWithExt, ffmpeg.KwArgs{
+					"filter:v": "scale=256:-1",
+				}).
+				OverWriteOutput()
+
+			if err := process.Run(); err != nil {
+				return fmt.Errorf("can't run ffmpeg: %w", err)
+			}
+
+			b, err := os.ReadFile(thumbnailPathWithExt)
+			if err != nil {
+				return fmt.Errorf("can't read thumbnail path: %w", err)
+			}
+
+			if _, err := webObjectStore.PutBytes(thumbnailFilename, b); err != nil {
+				return fmt.Errorf("can't publish to thumbnail path: %w", err)
+			}
+
+			return nil
+		})
+
+		if err := eg.Wait(); err != nil {
+			return fmt.Errorf("can't convert to web friendly: %w", err)
 		}
 
 		parts := strings.Split(highrezURL, "_")
@@ -118,22 +130,55 @@ func Run(ctx context.Context) error {
 			return fmt.Errorf("can't convert frame to int: %w", err)
 		}
 
-		entry, err := metadataKVStore.Get(videoFeedID)
-		if err != nil {
-			return fmt.Errorf("can't get metadata from key value store: %w", err)
-		}
-		metadata := shared.MustSatelliteMetadataFromJSON(entry.Value())
-		metadata.WebFriendly.LastFrameProcessed = frame
-		metadata.WebFriendly.Width = width
-		metadata.WebFriendly.Height = height
-		metadata.WebFriendly.ThumbnailWidth = thumbnailWidth
-		metadata.WebFriendly.ThumbnailHeight = thumbnailHeight
-		metadata.WebFriendly.FrameCount = metadata.HiRez.FrameCount
-		if _, err := metadataKVStore.Put(videoFeedID, metadata.MustToJSON()); err != nil {
-			return fmt.Errorf("can't put metadata to key value store: %w", err)
+		for {
+			entry, err := metadataKVStore.Get(videoFeedID)
+			if err != nil {
+				return fmt.Errorf("can't get metadata from key value store: %w", err)
+			}
+			metadata := shared.MustSatelliteMetadataFromJSON(entry.Value())
+
+			if metadata.WebFriendly.LastFrameProcessed >= frame {
+				break
+			}
+
+			metadata.WebFriendly.LastFrameProcessed = frame
+			getWH := func(path string) (int, int, error) {
+				inProbeJSONStr, err := ffmpeg.Probe(path)
+				if err != nil {
+					return 0, 0, fmt.Errorf("can't probe video feed: %w", err)
+				}
+				probe, err := gabs.ParseJSON([]byte(inProbeJSONStr))
+				if err != nil {
+					return 0, 0, fmt.Errorf("can't parse probe json: %w", err)
+				}
+				width := probe.Path("streams.0.width").Data().(float64)
+				height := probe.Path("streams.0.height").Data().(float64)
+				return int(width), int(height), nil
+			}
+
+			if metadata.WebFriendly.Width == 0 {
+				metadata.WebFriendly.Width, metadata.WebFriendly.Height, err = getWH(fullPathWithExt)
+				if err != nil {
+					return fmt.Errorf("can't get width and height: %w", err)
+				}
+			}
+
+			if metadata.WebFriendly.ThumbnailWidth == 0 {
+				metadata.WebFriendly.ThumbnailWidth, metadata.WebFriendly.ThumbnailHeight, err = getWH(thumbnailPathWithExt)
+				if err != nil {
+					return fmt.Errorf("can't get thumbnail width and height: %w", err)
+				}
+			}
+
+			metadata.WebFriendly.FrameCount = metadata.HiRez.FrameCount
+			if _, err := metadataKVStore.Update(videoFeedID, metadata.MustToJSON(), entry.Revision()); err != nil {
+				log.Printf("Can't update metadata: %v, retrying", err)
+			} else {
+				break
+			}
 		}
 
-		log.Printf("Converted %s to web friendly images %dx%d and %dx%d", highrezURL, width, height, thumbnailWidth, thumbnailHeight)
+		// log.Printf("Converted %s to web friendly images %dx%d and %dx%d", highrezURL, width, height, thumbnailWidth, thumbnailHeight)
 
 		return nil
 	}
@@ -155,7 +200,7 @@ func Run(ctx context.Context) error {
 
 			for _, msg := range msgs {
 				highrezURL := string(msg.Data)
-				log.Printf("Received message: %s", highrezURL)
+				// log.Printf("Received message: %s", highrezURL)
 
 				if err := convertToWebFriendly(highrezURL); err != nil {
 					log.Printf("can't convert raw bytes to high resolution: %v", err)

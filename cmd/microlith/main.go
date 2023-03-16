@@ -91,9 +91,11 @@ func run(ctx context.Context) error {
 	}
 
 	if stage == "all" || stage == "imagery" || stage == "imagery-web-friendly" {
-		eg.Go(func() error {
-			return satelliteimagerywebfriendly.Run(setupCtx)
-		})
+		for i := 0; i < 4; i++ {
+			eg.Go(func() error {
+				return satelliteimagerywebfriendly.Run(setupCtx, tmpDir)
+			})
+		}
 	}
 
 	if stage == "all" || stage == "imagery" || stage == "imagery-diff" {

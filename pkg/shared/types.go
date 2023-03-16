@@ -17,10 +17,11 @@ type SatelliteMetadata struct {
 	} `json:"pullFromFeed"`
 
 	HiRez struct {
-		OrginalResolutionWidth  int `json:"orginalResolutionWidth"`
-		OrginalResolutionHeight int `json:"orginalResolutionHeight"`
-		FrameCount              int `json:"frameCount"`
-		LastFrameProcessed      int `json:"lastFrameProcessed"`
+		OrginalResolutionWidth  int    `json:"orginalResolutionWidth"`
+		OrginalResolutionHeight int    `json:"orginalResolutionHeight"`
+		ConversionProgress      string `json:"conversionProgress"`
+		FrameCount              int    `json:"frameCount"`
+		LastFrameUploaded       int    `json:"lastFrameUploaded"`
 	} `json:"hiRez"`
 
 	WebFriendly struct {

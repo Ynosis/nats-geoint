@@ -27,22 +27,31 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("can't create kv metadata: %w", err)
 	}
 
-	// Let's get the list of existing metadata
-	existingMetadataKeys, err := kvMetadata.Keys()
-	if err != nil {
-		if !errors.Is(err, nats.ErrNoKeysFound) {
-			return fmt.Errorf("can't list existing metadata: %w", err)
-		}
-	}
+	errCh := make(chan error, 1)
 
-	if len(existingMetadataKeys) == 0 {
+	sub, err := nc.Subscribe("satellites.metadata.pull", func(msg *nats.Msg) {
+		// Let's get the list of existing metadata
+		existingMetadataKeys, err := kvMetadata.Keys()
+		if err != nil {
+			if !errors.Is(err, nats.ErrNoKeysFound) {
+				errCh <- fmt.Errorf("can't get metadata keys: %w", err)
+				return
+			}
+		}
+
+		if len(existingMetadataKeys) > 0 {
+			return
+		}
+
 		// No metadata, let's get some
 		// from https://developers.google.com/earth-engine/timelapse/videos"
 		videoURLs := []string{
 			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/lake-mead.mp4",
 			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/beijing-capital-international-airport-beijing-china.mp4",
 			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/columbia-glacier-alaska.mp4",
-			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/vegas.mp4",
+			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/al-jowf-saudi-arabia.mp4",
+			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/cancun-mexico.mp4",
+			"https://storage.googleapis.com/earthengine-timelapse/2020/curated/mp4/label/1x/kennecott-copper-mine-slc-utah.mp4",
 		}
 
 		for _, videoURL := range videoURLs {
@@ -54,15 +63,23 @@ func Run(ctx context.Context) error {
 				InitialSourceURL: videoURL,
 			}
 			if _, err := kvMetadata.Put(idStr, m.MustToJSON()); err != nil {
-				return fmt.Errorf("can't put metadata into kv store: %w", err)
+				errCh <- fmt.Errorf("can't put metadata into kv store: %w", err)
+				return
 			}
 
 			log.Printf("added metadata for %s", videoURL)
 		}
+	})
+	if err != nil {
+		return fmt.Errorf("can't subscribe to satellite metadata pull: %w", err)
 	}
 
-	<-ctx.Done()
+	defer sub.Drain()
 
-	err = ctx.Err()
-	return err
+	select {
+	case err := <-errCh:
+		return fmt.Errorf("error running services: %w", err)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

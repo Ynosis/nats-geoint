@@ -7,7 +7,6 @@
     natsKVClient,
     natsObjectStoreClient,
   } from '@/shared/nats'
-  import VueMermaidString from 'vue-mermaid-string'
 
   const [nc, metadataKV, webImageStore] = await Promise.all([
     natsClient(),
@@ -21,6 +20,7 @@
     suffix: string,
   ) => {
     const path = `${m.id}_${frame.toString().padStart(5, '0')}_${suffix}`
+    // console.log(`getting ${path} from web store`)
     const res = await webImageStore.get(path)
     if (!res?.data) {
       // console.error(`no data for ${path}`)
@@ -38,7 +38,8 @@
         blobParts.push(value)
       }
     }
-    const blob = new Blob(blobParts, { type: 'image/jpeg' })
+
+    const blob = new Blob(blobParts, { type: 'image/jpg' })
     const url = URL.createObjectURL(blob)
     return url
   }
@@ -54,8 +55,9 @@
     hiRez: {
       orginalResolutionWidth: number
       orginalResolutionHeight: number
+      conversionProgress: string
       frameCount: number
-      lastFrameProcessed: number
+      lastFrameUploaded: number
     }
     webFriendly: {
       width: number
@@ -66,14 +68,18 @@
       lastFrameProcessed: number
     }
   }
+  interface SatelliteMetadataRevision {
+    metadata: SatelliteMetadata
+    revision: number
+  }
 
-  const metadatas = ref<SatelliteMetadata[]>([])
+  const metadataRevisions = ref<SatelliteMetadataRevision[]>([])
   const currentFrames = ref<
     { thumbnail: number; left: number; right: number }[]
   >([])
 
   const thumbnailButtonFrames = computed(() => {
-    return metadatas.value.map((metadata, i) => {
+    return metadataRevisions.value.map((metadataRevision, i) => {
       const frameOffset = currentFrames.value[i].thumbnail
       if (!frameOffset) return
 
@@ -81,7 +87,8 @@
       const offsets: number[] = []
       for (let i = frameOffset - count; i <= frameOffset + count; i++) {
         if (i < 1) continue
-        if (i > metadata.webFriendly.lastFrameProcessed) continue
+        if (i > metadataRevision.metadata.webFriendly.lastFrameProcessed)
+          continue
 
         offsets.push(i)
       }
@@ -95,8 +102,12 @@
     const dataURLs = frames.map(async (frame, i) => {
       if (!frame || !webImageStore) return
 
-      const metadata = metadatas.value[i]
-      const url = await webStoreImage(metadata, frame.thumbnail, 'thumbnail')
+      const metadataRevision = metadataRevisions.value[i]
+      const url = await webStoreImage(
+        metadataRevision.metadata,
+        frame.thumbnail,
+        'thumbnail',
+      )
       return url
     })
 
@@ -107,7 +118,7 @@
     const currentFrame = currentFrames.value[i]
     currentFrame.left = currentFrame.thumbnail
 
-    const videoFeedID = metadatas.value[i].id
+    const videoFeedID = metadataRevisions.value[i].metadata.id
     updateDiff(videoFeedID, currentFrame.left, currentFrame.right)
   }
 
@@ -115,7 +126,7 @@
     const currentFrame = currentFrames.value[i]
     currentFrame.right = currentFrame.thumbnail
 
-    const videoFeedID = metadatas.value[i].id
+    const videoFeedID = metadataRevisions.value[i].metadata.id
     updateDiff(videoFeedID, currentFrame.left, currentFrame.right)
   }
 
@@ -130,25 +141,34 @@
     success: SatelliteImageryDiffSuccessResponse
   }
 
-  const diffStats = ref<SatelliteImageryDiffSuccessResponse>({
-    averageDistance: 0,
-    differenceDistance: 0,
-    perceptionDistance: 0,
-  })
+  const diffStats = ref<SatelliteImageryDiffSuccessResponse[]>([])
   const updateDiff = async (
     videoFeedID: BigInt,
     startFrame: number,
     endFrame: number,
   ) => {
+    const i = metadataRevisions.value.findIndex(
+      x => x.metadata.id === videoFeedID,
+    )
+    if (i === -1) return
+
+    diffStats.value[i] = {
+      averageDistance: 0,
+      differenceDistance: 0,
+      perceptionDistance: 0,
+    }
+
     const encoded = encodeToBuf({ videoFeedID, startFrame, endFrame })
-    const msg = await nc.request('satellite-imagery-diff', encoded)
+    const msg = await nc.request('satellite-imagery-diff', encoded, {
+      timeout: 10 * 1000,
+    })
     const res = decodeFromBuf<SatelliteImageryDiffResponse>(msg.data)
 
     if (res.error) {
       console.error(res.error)
     }
 
-    diffStats.value = res.success
+    diffStats.value[i] = res.success
   }
 
   const compareImageURLs = computedAsync(async () => {
@@ -158,7 +178,7 @@
     const dataURLs = frames.map(async (frame, i) => {
       if (!frame || !webImageStore) return { leftURL: '', rightURL: '' }
 
-      const metadata = metadatas.value[i]
+      const { metadata } = metadataRevisions.value[i]
       const [leftURL, rightURL] = await Promise.all([
         webStoreImage(metadata, frame.left, 'full'),
         webStoreImage(metadata, frame.right, 'full'),
@@ -171,75 +191,43 @@
 
   watchEffect(async () => {
     for await (const e of await metadataKV.watch()) {
-      const m: SatelliteMetadata = decodeFromBuf(e.value)
-      const id = m.id.toString()
-      let i = metadatas.value.findIndex(x => x.id.toString() === id)
+      const { value, revision } = e
+      const metadata: SatelliteMetadata = decodeFromBuf(value)
+      const id = metadata.id.toString()
+      let i = metadataRevisions.value.findIndex(
+        x => x.metadata.id.toString() === id,
+      )
       if (i === -1) {
-        metadatas.value.push(m)
+        metadataRevisions.value.push({ metadata, revision })
         currentFrames.value.push({
           thumbnail: 1,
           left: 1,
           right: 1,
         })
-        i = metadatas.value.length - 1
+        diffStats.value.push({
+          averageDistance: 0,
+          differenceDistance: 0,
+          perceptionDistance: 0,
+        })
+        i = metadataRevisions.value.length - 1
       } else {
-        metadatas.value[i] = m
+        metadataRevisions.value[i] = { metadata, revision }
       }
     }
   })
 
-  function startProcess(m: SatelliteMetadata) {
-    m.shouldBeProcessed = true
-    metadataKV.put(m.id.toString(), encodeToBuf(m))
-    console.log('startProcess', m)
-  }
-
-  function removeProcess(m: SatelliteMetadata) {
-    m.shouldBeProcessed = false
-    metadataKV.put(m.id.toString(), encodeToBuf(m))
-    console.log('removeProcess', m)
-  }
-
-  const doneArrow = '--o'
-  const pendingArrow = '-. pending .->'
-  const content = computed(() => {
-    return metadatas.value.map(
-      m => `
-      flowchart LR
-          Started["Process started"]
-          FromFeed["<i>Pull from feed</i>
-      ${m.pullFromFeed.wasCached ? 'Cached' : 'Downloaded'}
-      ${bytesHumanize(m.pullFromFeed.bytes)}"]
-          HiRez["<i>Convert to High Resolution</i>
-      ${m.hiRez.orginalResolutionWidth}x${m.hiRez.orginalResolutionHeight}
-      ${m.hiRez.lastFrameProcessed}/${m.hiRez.frameCount} processed"]
-          WebFriendly["<i>Make Web Friendly</i>
-      Full: ${m.webFriendly.width}x${m.webFriendly.height}
-      Thumbnail: ${m.webFriendly.thumbnailWidth}x${
-        m.webFriendly.thumbnailHeight
-      }
-      ${m.webFriendly.lastFrameProcessed}/${m.webFriendly.frameCount} processed
-      "]
-          %% ML[Machine Learning]
-
-          Started${m.shouldBeProcessed ? doneArrow : pendingArrow}FromFeed
-          FromFeed${
-            m.hiRez.frameCount &&
-            m.hiRez.lastFrameProcessed === m.hiRez.frameCount
-              ? doneArrow
-              : pendingArrow
-          }HiRez
-          HiRez${
-            m.webFriendly.lastFrameProcessed === m.webFriendly.frameCount
-              ? doneArrow
-              : pendingArrow
-          }WebFriendly
-          %% HiRez-. done .->ML
-          %% ML-. pending .->WebFriendly
-
-      `,
+  async function startProcess(mr: SatelliteMetadataRevision) {
+    mr.metadata.shouldBeProcessed = true
+    await metadataKV.update(
+      mr.metadata.id.toString(),
+      encodeToBuf(mr.metadata),
+      mr.revision,
     )
-  })
+  }
+
+  async function loadMetadata() {
+    await nc.publish('satellites.metadata.pull')
+  }
 </script>
 
 <template>
@@ -248,154 +236,315 @@
       <div>Waiting for NATS server</div>
     </template>
     <template #default>
-      <div>
-        <div class="text-xl uppercase text-bold">Imagery from timelapse</div>
-        <div class="flex flex-col gap-6">
-          <div
-            class="shadow-lg card bg-base-100"
-            v-for="(m, i) in metadatas"
-            :key="m.id.toString()"
-          >
-            <div class="card-body">
-              <div class="flex flex-wrap justify-between">
-                <div>
-                  <div class="card-title">
-                    <span class="opacity-50">ID:</span>
-                    {{ m.id }}
-                  </div>
-                  <div class="card-compact">
-                    <span class="opacity-50">SOURCE:</span>
-                    {{ m.initialSourceURL }}
+      <div class="h-full">
+        <div
+          v-if="!!!metadataRevisions.length"
+          class="grid w-full h-full place-items-center"
+        >
+          <button class="btn btn-primary btn-xl" @click="loadMetadata">
+            Load metadata from source
+          </button>
+        </div>
+        <div v-else class="flex flex-col gap-4">
+          <div class="text-2xl text-center uppercase text-bold">
+            Imagery from timelapses
+          </div>
+          <div class="flex flex-col items-center gap-4">
+            <div
+              class="w-full max-w-6xl shadow-lg card bg-base-100"
+              v-for="(mr, i) in metadataRevisions"
+              :key="mr.metadata.id.toString()"
+            >
+              <div class="card-body">
+                <div class="flex flex-wrap justify-between">
+                  <div>
+                    <div class="uppercase card-title">
+                      {{
+                        mr.metadata.initialSourceURL
+                          .split('/')
+                          .slice(-1)[0]
+                          .split('.')[0]
+                          .replaceAll('-', ' ')
+                      }}
+                    </div>
+                    <div class="opacity-50 card-compact">
+                      ID: {{ mr.metadata.id }}
+                    </div>
+                    <div class="opacity-50 card-compact">
+                      SOURCE: {{ mr.metadata.initialSourceURL }}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div class="grid w-full place-items-center">
-                <VueMermaidString
+                <div
+                  class="grid w-full place-items-center"
+                  v-if="
+                    mr.metadata.shouldBeProcessed &&
+                    (!mr.metadata.webFriendly.frameCount ||
+                      mr.metadata.webFriendly.lastFrameProcessed !==
+                        mr.metadata.webFriendly.frameCount)
+                  "
+                >
+                  <!-- <VueMermaidString
                   :value="content[i]"
                   :options="{ theme: 'dark' }"
-                />
-              </div>
-
-              <div
-                v-if="m.shouldBeProcessed && m.webFriendly.frameCount"
-                class="flex flex-col gap-4"
-              >
-                <div class="divider">Compare</div>
-                <div class="flex flex-col items-center gap-2">
-                  <div class="flex items-end gap-4">
-                    <button
-                      class="btn btn-primary btn-xl"
-                      @click="setLeftFrame(i)"
-                    >
-                      <icon-mdi:arrow-down-left /> Set Left
-                      {{ currentFrames[i].left }}
-                    </button>
-                    <img
-                      class="object-contain shadow-2xl select-none rounded-xl ring-2 ring-primary"
-                      :src="thumbnailImageURLs[i]"
-                    />
-                    <button
-                      class="btn btn-primary btn-xl"
-                      @click="setRightFrame(i)"
-                    >
-                      <icon-mdi:arrow-down-right /> Set Right
-                      {{ currentFrames[i].right }}
-                    </button>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <button
-                      class="btn btn-ghost btn-sm"
-                      @click="currentFrames[i].thumbnail = 1"
-                    >
-                      <icon-material-symbols:keyboard-double-arrow-left />
-                    </button>
-                    <button
-                      v-for="tf in thumbnailButtonFrames[i]"
-                      class="btn"
+                /> -->
+                  <ul class="items-start w-full steps">
+                    <li
+                      data-content="📡"
+                      class="step"
                       :class="{
-                        'btn-primary': tf === currentFrames[i].thumbnail,
-                        'btn-ghost': tf !== currentFrames[i].thumbnail,
+                        'step-primary': mr.metadata.pullFromFeed.bytes,
                       }"
-                      @click="currentFrames[i].thumbnail = tf"
                     >
-                      {{ tf }}
-                    </button>
-                    <button
-                      class="btn btn-ghost btn-sm"
-                      @click="
-                        currentFrames[i].thumbnail =
-                          m.webFriendly.lastFrameProcessed
-                      "
+                      <div class="font-bold">Pull from feed</div>
+                      <div>
+                        {{
+                          mr.metadata.pullFromFeed.wasCached
+                            ? 'Cached'
+                            : 'Downloaded'
+                        }}
+                      </div>
+                      <div v-if="mr.metadata.pullFromFeed.bytes">
+                        {{ bytesHumanize(mr.metadata.pullFromFeed.bytes) }}
+                      </div>
+                    </li>
+                    <li
+                      data-content="🎥"
+                      class="step"
+                      :class="{
+                        'step-primary':
+                          mr.metadata.hiRez.conversionProgress === 'done',
+                      }"
                     >
-                      <icon-material-symbols:keyboard-double-arrow-right />
-                    </button>
-                  </div>
+                      <div class="font-bold">Convert to Images</div>
+                      <div>
+                        {{ mr.metadata.hiRez.orginalResolutionWidth }}x{{
+                          mr.metadata.hiRez.orginalResolutionHeight
+                        }}
+                      </div>
+                      <div
+                        v-if="
+                          mr.metadata.hiRez.conversionProgress.endsWith('%')
+                        "
+                        class="radial-progress"
+                        :style="`--value: ${mr.metadata.hiRez.conversionProgress.replaceAll(
+                          '%',
+                          '',
+                        )};`"
+                      >
+                        {{ mr.metadata.hiRez.conversionProgress }}
+                      </div>
+                    </li>
+                    <li
+                      data-content="⬆️"
+                      class="step"
+                      :class="{
+                        'step-primary':
+                          mr.metadata.hiRez.frameCount &&
+                          mr.metadata.hiRez.lastFrameUploaded ===
+                            mr.metadata.hiRez.frameCount,
+                      }"
+                    >
+                      <div class="font-bold">Upload High Resolution</div>
+                      <div
+                        v-if="
+                          mr.metadata.hiRez.lastFrameUploaded !==
+                          mr.metadata.hiRez.frameCount
+                        "
+                        class="radial-progress"
+                        :style="`--value: ${Math.round(
+                          (100 * mr.metadata.hiRez.lastFrameUploaded) /
+                            mr.metadata.hiRez.frameCount,
+                        )};`"
+                      >
+                        {{
+                          Math.round(
+                            (100 * mr.metadata.hiRez.lastFrameUploaded) /
+                              mr.metadata.hiRez.frameCount,
+                          )
+                        }}%
+                      </div>
+                      <div v-else>
+                        {{ mr.metadata.hiRez.frameCount }} frames
+                      </div>
+                    </li>
+                    <li
+                      data-content="🖼️"
+                      class="step"
+                      :class="{
+                        'step-primary':
+                          mr.metadata.webFriendly.frameCount &&
+                          mr.metadata.webFriendly.lastFrameProcessed ===
+                            mr.metadata.webFriendly.frameCount,
+                      }"
+                    >
+                      <div class="font-bold">Convert to Web</div>
+                      <div
+                        v-if="
+                          mr.metadata.webFriendly.lastFrameProcessed !==
+                          mr.metadata.webFriendly.frameCount
+                        "
+                        class="radial-progress"
+                        :style="`--value: ${Math.round(
+                          (100 * mr.metadata.webFriendly.lastFrameProcessed) /
+                            mr.metadata.webFriendly.frameCount,
+                        )};`"
+                      >
+                        {{
+                          Math.round(
+                            (100 * mr.metadata.webFriendly.lastFrameProcessed) /
+                              mr.metadata.webFriendly.frameCount,
+                          )
+                        }}%
+                      </div>
+                      <div v-else>
+                        <div>
+                          Full: {{ mr.metadata.webFriendly.width }}x{{
+                            mr.metadata.webFriendly.height
+                          }}
+                        </div>
+                        <div>
+                          Thumbnails:
+                          {{ mr.metadata.webFriendly.thumbnailWidth }}x{{
+                            mr.metadata.webFriendly.thumbnailHeight
+                          }}
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
                 </div>
-                <div class="rounded-xl">
-                  <image-compare
-                    :full="false"
-                    :padding="{ left: 20, right: 20 }"
-                    :after="compareImageURLs[i].leftURL"
-                    :before="compareImageURLs[i].rightURL"
-                  />
-                </div>
-                <table class="table table-compact">
-                  <caption>
-                    Image differencing scores
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th class="">Type</th>
-                      <th>Score</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <th>Average</th>
-                      <td
-                        class="text-xl font-bold"
-                        :class="{
-                          'text-error': diffStats.averageDistance > 5,
-                        }"
-                      >
-                        {{ diffStats.averageDistance }}
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Difference</th>
-                      <td
-                        class="text-xl font-bold"
-                        :class="{
-                          'text-error': diffStats.differenceDistance > 5,
-                        }"
-                      >
-                        {{ diffStats.differenceDistance }}
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Perception</th>
-                      <td
-                        class="text-xl font-bold"
-                        :class="{
-                          'text-error': diffStats.perceptionDistance > 5,
-                        }"
-                      >
-                        {{ diffStats.perceptionDistance }}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div class="divider" />
-              </div>
-              <div class="justify-end card-actions">
-                <button
-                  v-if="!m.shouldBeProcessed"
-                  class="btn btn-success btn-xs"
-                  @click="startProcess(m)"
+
+                <div
+                  v-if="
+                    mr.metadata.shouldBeProcessed &&
+                    mr.metadata.webFriendly.frameCount
+                  "
+                  class="flex flex-col items-center gap-4"
                 >
-                  <icon-mdi:check />
-                  Start Process
-                </button>
+                  <div class="divider">Compare</div>
+                  <div class="flex flex-col items-center gap-2">
+                    <div class="flex flex-wrap items-end gap-4">
+                      <button
+                        class="btn btn-primary btn-xl"
+                        @click="setLeftFrame(i)"
+                      >
+                        <icon-mdi:arrow-down-left /> Set Left
+                        {{ currentFrames[i].left }}
+                      </button>
+                      <img
+                        class="object-contain shadow-2xl select-none rounded-xl ring-2 ring-primary"
+                        :src="thumbnailImageURLs[i]"
+                      />
+                      <button
+                        class="btn btn-primary btn-xl"
+                        @click="setRightFrame(i)"
+                      >
+                        <icon-mdi:arrow-down-right /> Set Right
+                        {{ currentFrames[i].right }}
+                      </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <button
+                        class="btn btn-ghost btn-sm"
+                        @click="currentFrames[i].thumbnail = 1"
+                      >
+                        <icon-material-symbols:keyboard-double-arrow-left />
+                      </button>
+                      <button
+                        v-for="tf in thumbnailButtonFrames[i]"
+                        class="btn"
+                        :class="{
+                          'btn-primary': tf === currentFrames[i].thumbnail,
+                          'btn-ghost': tf !== currentFrames[i].thumbnail,
+                        }"
+                        @click="currentFrames[i].thumbnail = tf"
+                      >
+                        {{ tf }}
+                      </button>
+                      <button
+                        class="btn btn-ghost btn-sm"
+                        @click="
+                          currentFrames[i].thumbnail =
+                            mr.metadata.webFriendly.lastFrameProcessed
+                        "
+                      >
+                        <icon-material-symbols:keyboard-double-arrow-right />
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    class="w-full rounded-6xl"
+                    v-if="
+                      compareImageURLs[i]?.leftURL &&
+                      compareImageURLs[i]?.rightURL
+                    "
+                  >
+                    <image-compare
+                      :full="false"
+                      :after="compareImageURLs[i].leftURL"
+                      :before="compareImageURLs[i].rightURL"
+                    />
+                  </div>
+                  <div>
+                    <table class="table table-compact">
+                      <caption>
+                        Image differencing service
+                      </caption>
+                      <thead>
+                        <tr>
+                          <th class="">Type</th>
+                          <th>Score</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <th>Average</th>
+                          <td
+                            class="text-xl font-bold"
+                            :class="{
+                              'text-error': diffStats[i].averageDistance > 5,
+                            }"
+                          >
+                            {{ diffStats[i].averageDistance || '-' }}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>Difference</th>
+                          <td
+                            class="text-xl font-bold"
+                            :class="{
+                              'text-error': diffStats[i].differenceDistance > 5,
+                            }"
+                          >
+                            {{ diffStats[i].differenceDistance || '-' }}
+                          </td>
+                        </tr>
+                        <tr>
+                          <th>Perception</th>
+                          <td
+                            class="text-xl font-bold"
+                            :class="{
+                              'text-error': diffStats[i].perceptionDistance > 5,
+                            }"
+                          >
+                            {{ diffStats[i].perceptionDistance || '-' }}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="divider" />
+                </div>
+                <div class="justify-end card-actions">
+                  <button
+                    v-if="!mr.metadata.shouldBeProcessed"
+                    class="btn btn-success btn-block btn-xl"
+                    @click="startProcess(mr)"
+                  >
+                    <icon-mdi:check />
+                    Start Process
+                  </button>
+                </div>
               </div>
             </div>
           </div>

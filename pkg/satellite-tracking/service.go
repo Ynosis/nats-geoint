@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
+	"math/rand"
 	"strings"
 	"time"
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
-	"github.com/go-echarts/go-echarts/v2/charts"
-	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/goccy/go-json"
 	sat "github.com/joshuaferrara/go-satellite"
 	"github.com/nats-io/nats.go"
@@ -105,35 +103,23 @@ func Run(ctx context.Context) error {
 
 	satTrackingSubjectPrefix := "sat.tracking"
 
-	maxMsgsPerSubject := int64(8000)
-	line := charts.NewLine()
-	line.SetGlobalOptions(charts.WithTitleOpts(opts.Title{
-		Title:    "Satallite Tracking",
-		Subtitle: fmt.Sprintf("Max %d messages per subject, multi subject", maxMsgsPerSubject),
-	}))
+	// maxMsgsPerSubject := int64(8000)
 
 	if err := js.DeleteStream("SatalliteTracking"); err != nil && err != nats.ErrStreamNotFound {
 		return fmt.Errorf("can't delete stream: %w", err)
 	}
 
 	if _, err := js.AddStream(&nats.StreamConfig{
-		Name:              "SatalliteTracking",
-		Subjects:          []string{satTrackingSubjectPrefix + ".>"},
-		MaxMsgsPerSubject: maxMsgsPerSubject,
-		Retention:         nats.LimitsPolicy,
-		Discard:           nats.DiscardOld,
-		Storage:           nats.FileStorage,
+		Name:     "SatalliteTracking",
+		Subjects: []string{satTrackingSubjectPrefix + ".>"},
+		// MaxMsgsPerSubject: maxMsgsPerSubject,
+		Retention: nats.LimitsPolicy,
+		Discard:   nats.DiscardOld,
+		Storage:   nats.FileStorage,
 	}); err != nil && err != nats.ErrStreamNameAlreadyInUse {
 		return fmt.Errorf("can't create stream: %w", err)
 	}
 
-	testLimit := int(1.25 * float64(maxMsgsPerSubject))
-
-	count := make([]int, 0, len(satallites))
-	latencies := make([]opts.LineData, 0, len(satallites))
-	// totalMessages := make([]opts.LineData, 0, len(satallites))
-
-done:
 	for {
 		select {
 		case <-ctx.Done():
@@ -151,58 +137,30 @@ done:
 			minute := now.Minute()
 			second := now.Second()
 
-			for _, s := range satallites {
-				eci, _ := sat.Propagate(s.TLE, year, month, day, hour, minute, second)
-				alt, _, llRad := sat.ECIToLLA(eci, gmst)
-				ll := sat.LatLongDeg(llRad)
+			s := satallites[rand.Intn(len(satallites))]
 
-				p.LongitudeDeg = ll.Longitude
-				p.LatitudeDeg = ll.Latitude
-				p.AltitudeKm = math.Abs(alt)
-				b, _ := json.Marshal(p)
-				// log.Print(len(b))
-				// subject := fmt.Sprintf("%s.%s", satTrackingSubjectPrefix, s.ID)
-				subject := fmt.Sprintf("%s.sats", satTrackingSubjectPrefix) // For @derek
+			// for _, s := range satallites {
+			eci, _ := sat.Propagate(s.TLE, year, month, day, hour, minute, second)
+			alt, _, llRad := sat.ECIToLLA(eci, gmst)
+			ll := sat.LatLongDeg(llRad)
 
-				if _, err := js.PublishAsync(subject, b); err != nil {
-					return fmt.Errorf("can't publish: %w", err)
-				}
+			p.LongitudeDeg = ll.Longitude
+			p.LatitudeDeg = ll.Latitude
+			p.AltitudeKm = math.Abs(alt)
+			b, _ := json.Marshal(p)
+			// log.Print(len(b))
+			// subject := fmt.Sprintf("%s.%s", satTrackingSubjectPrefix, s.ID)
+			subject := fmt.Sprintf("%s.sats", satTrackingSubjectPrefix) // For @derek
+
+			if _, err := js.PublishAsync(subject, b); err != nil {
+				return fmt.Errorf("can't publish: %w", err)
 			}
+			// }
 
-			took := time.Since(now)
-			latencies = append(latencies, opts.LineData{Value: took.Milliseconds()})
-			// totalMessages = append(totalMessages, opts.LineData{Value: len(satallites)})
-			count = append(count, len(latencies))
-
-			log.Printf("%d published %d positions in %s", len(latencies), len(satallites), took)
-
-			if len(latencies) == testLimit {
-				break done
-			}
+			// took := time.Since(now)
+			// log.Printf("%d positions in %s", len(satallites), took)
 		}
 	}
-
-	line.AddSeries("update times", latencies)
-	// line.AddSeries("total messages", totalMessages)
-	line.SetSeriesOptions(charts.WithLineChartOpts(
-		opts.LineChart{
-			ShowSymbol: true,
-			// Smooth: true,
-		}),
-	)
-	line.SetXAxis(count)
-	// line.SetXAxis([]string{"0", fmt.Sprint(maxMsgsPerSubject)})
-
-	f, err := os.Create("satallite-tracking.html")
-	if err != nil {
-		return fmt.Errorf("can't create file: %w", err)
-	}
-	defer f.Close()
-	if err := line.Render(f); err != nil {
-		return fmt.Errorf("can't render chart: %w", err)
-	}
-
-	return nil
 }
 
 const (

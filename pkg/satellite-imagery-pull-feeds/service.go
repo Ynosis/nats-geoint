@@ -110,24 +110,6 @@ func Run(ctx context.Context, tmpDir string) error {
 	if err != nil {
 		return fmt.Errorf("can't create watch: %w", err)
 	}
-
-	keys, err := kvMetadata.Keys()
-	if err != nil {
-		if err != nats.ErrNoKeysFound {
-			return fmt.Errorf("can't get metadata keys: %w", err)
-		}
-	} else {
-		for _, key := range keys {
-			entry, err := kvMetadata.Get(key)
-			if err != nil {
-				return fmt.Errorf("can't get metadata for key %s: %w", key, err)
-			}
-			if err := processEntry(entry); err != nil {
-				return fmt.Errorf("can't process entry: %w", err)
-			}
-		}
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
