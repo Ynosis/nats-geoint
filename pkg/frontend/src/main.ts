@@ -15,4 +15,4 @@ const router = createRouter({
 app.use(router).use(createHead())
 app.mount('#app')
 
-console.log(routes)
+// console.log(routes)

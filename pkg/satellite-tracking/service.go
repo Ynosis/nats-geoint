@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"math/rand"
 	"strings"
 	"time"
 
@@ -24,8 +23,23 @@ var activeTLE string
 var activeJSON string
 
 type satelliteMetadata struct {
-	ID   string `json:"OBJECT_ID"`
-	Name string `json:"OBJECT_NAME"`
+	ID                 string  `json:"OBJECT_ID,omitempty"`
+	Name               string  `json:"OBJECT_NAME,omitempty"`
+	Epoch              string  `json:"EPOCH,omitempty"`
+	MeanMotion         float64 `json:"MEAN_MOTION,omitempty"`
+	Eccentricity       float64 `json:"ECCENTRICITY,omitempty"`
+	Inclination        float64 `json:"INCLINATION,omitempty"`
+	RaOfAscNode        float64 `json:"RA_OF_ASC_NODE,omitempty"`
+	ArgOfPericenter    float64 `json:"ARG_OF_PERICENTER,omitempty"`
+	MeanAnomaly        float64 `json:"MEAN_ANOMALY,omitempty"`
+	EphemerisType      int64   `json:"EPHEMERIS_TYPE,omitempty"`
+	ClassificationType string  `json:"CLASSIFICATION_TYPE,omitempty"`
+	NoradCatId         int64   `json:"NORAD_CAT_ID,omitempty"`
+	ElementSetNo       int64   `json:"ELEMENT_SET_NO,omitempty"`
+	RevAtEpoch         int64   `json:"REV_AT_EPOCH,omitempty"`
+	Bstar              float64 `json:"BSTAR,omitempty"`
+	MeanMotionDot      float64 `json:"MEAN_MOTION_DOT,omitempty"`
+	MeanMotionDdot     float64 `json:"MEAN_MOTION_DDOT,omitempty"`
 }
 
 type satallite struct {
@@ -35,16 +49,36 @@ type satallite struct {
 }
 
 type position struct {
-	LongitudeDeg float64
-	LatitudeDeg  float64
-	AltitudeKm   float64
+	LongitudeDeg float64 `json:"longitudeDeg,omitempty"`
+	LatitudeDeg  float64 `json:"latitudeDeg,omitempty"`
+	AltitudeKm   float64 `json:"altitudeKm,omitempty"`
 }
 
 func Run(ctx context.Context) error {
+	nc := shared.NewNATsClient(ctx)
+	js, err := nc.JetStream()
+	if err != nil {
+		return fmt.Errorf("can't get jetstream: %w", err)
+	}
+
+	kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
+		Bucket: "SatalliteTrackingMetadata",
+	})
+	if err != nil {
+		return fmt.Errorf("can't create kv: %w", err)
+	}
+
 	time.Sleep(1 * time.Second)
 	metadata := []satelliteMetadata{}
 	if err := json.Unmarshal([]byte(activeJSON), &metadata); err != nil {
 		return fmt.Errorf("can't unmarshal active.json: %w", err)
+	}
+	for _, m := range metadata {
+		b, err := json.Marshal(m)
+		if err != nil {
+			return fmt.Errorf("can't marshal metadata: %w", err)
+		}
+		kv.Put(casee.ToChainCase(m.ID), b)
 	}
 
 	rows := strings.Split(activeTLE, "\n")
@@ -68,6 +102,7 @@ func Run(ctx context.Context) error {
 
 				// remove metadata from search
 				metadata = append(metadata[:j], metadata[j+1:]...)
+
 				break
 			}
 		}
@@ -88,18 +123,9 @@ func Run(ctx context.Context) error {
 		satallites = append(satallites, s)
 	}
 
+	satallites = satallites[:100]
+
 	log.Printf("found %d satallites", len(satallites))
-
-	nc := shared.NewNATsClient(ctx)
-	var p position
-
-	t := time.NewTicker(100 * time.Millisecond)
-	defer t.Stop()
-
-	js, err := nc.JetStream()
-	if err != nil {
-		return fmt.Errorf("can't get jetstream: %w", err)
-	}
 
 	satTrackingSubjectPrefix := "sat.tracking"
 
@@ -120,6 +146,9 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("can't create stream: %w", err)
 	}
 
+	var p position
+	t := time.NewTicker(1000 * time.Millisecond)
+	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -137,28 +166,28 @@ func Run(ctx context.Context) error {
 			minute := now.Minute()
 			second := now.Second()
 
-			s := satallites[rand.Intn(len(satallites))]
+			// s := satallites[rand.Intn(len(satallites))]
 
-			// for _, s := range satallites {
-			eci, _ := sat.Propagate(s.TLE, year, month, day, hour, minute, second)
-			alt, _, llRad := sat.ECIToLLA(eci, gmst)
-			ll := sat.LatLongDeg(llRad)
+			for _, s := range satallites {
+				eci, _ := sat.Propagate(s.TLE, year, month, day, hour, minute, second)
+				alt, _, llRad := sat.ECIToLLA(eci, gmst)
+				ll := sat.LatLongDeg(llRad)
 
-			p.LongitudeDeg = ll.Longitude
-			p.LatitudeDeg = ll.Latitude
-			p.AltitudeKm = math.Abs(alt)
-			b, _ := json.Marshal(p)
-			// log.Print(len(b))
-			// subject := fmt.Sprintf("%s.%s", satTrackingSubjectPrefix, s.ID)
-			subject := fmt.Sprintf("%s.sats", satTrackingSubjectPrefix) // For @derek
+				p.LongitudeDeg = ll.Longitude
+				p.LatitudeDeg = ll.Latitude
+				p.AltitudeKm = math.Abs(alt)
+				b, _ := json.Marshal(p)
+				// log.Print(len(b))
+				subject := fmt.Sprintf("%s.%s", satTrackingSubjectPrefix, s.ID)
+				// subject := fmt.Sprintf("%s.sats", satTrackingSubjectPrefix) // For @derek
 
-			if _, err := js.PublishAsync(subject, b); err != nil {
-				return fmt.Errorf("can't publish: %w", err)
+				if _, err := js.PublishAsync(subject, b); err != nil {
+					return fmt.Errorf("can't publish: %w", err)
+				}
 			}
-			// }
 
-			// took := time.Since(now)
-			// log.Printf("%d positions in %s", len(satallites), took)
+			took := time.Since(now)
+			log.Printf("%d positions in %s", len(satallites), took)
 		}
 	}
 }

@@ -14,6 +14,7 @@ import (
 	satelliteimagerymetadata "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-metadata"
 	satelliteimagerypullfeeds "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-pull-feeds"
 	satelliteimagerywebfriendly "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-web-friendly"
+	satellitetracking "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-tracking"
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
 	"github.com/nats-io/nats.go"
 	"golang.org/x/sync/errgroup"
@@ -104,11 +105,11 @@ func run(ctx context.Context) error {
 		})
 	}
 
-	// if stage == "all" || stage == "tracking" {
-	// 	eg.Go(func() error {
-	// 		return satellitetracking.Run(setupCtx)
-	// 	})
-	// }
+	if stage == "all" || stage == "tracking" {
+		eg.Go(func() error {
+			return satellitetracking.Run(setupCtx)
+		})
+	}
 
 	if err := eg.Wait(); err != nil {
 		return fmt.Errorf("error running services: %w", err)
