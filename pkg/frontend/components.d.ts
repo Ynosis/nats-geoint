@@ -20,6 +20,7 @@ declare module '@vue/runtime-core' {
     'IconMdi:delete': typeof import('~icons/mdi/delete')['default']
     'IconNoto:satelliteAntenna': typeof import('~icons/noto/satellite-antenna')['default']
     'IconUil:locationArrow': typeof import('~icons/uil/location-arrow')['default']
+    'IconUil:server': typeof import('~icons/uil/server')['default']
     ImageCompare: typeof import('./src/components/ImageCompare.vue')['default']
     Mermaid: typeof import('./src/components/Mermaid.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

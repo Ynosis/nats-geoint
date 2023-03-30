@@ -2,35 +2,42 @@ package shared
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/micro"
 )
 
-func NewNATsClient(ctx context.Context) (nc *nats.Conn) {
+func NewNATsClient(ctx context.Context, cfg *micro.Config) (nc *nats.Conn, svc *micro.Service, err error) {
 
 	natsServerURL, exists := os.LookupEnv("NATS_SERVER_URL")
 	if !exists {
 		panic("NATS_SERVER_URL not set")
 	}
 
-	var err error
-	for nc == nil {
-		opts := nats.Options{
-			Url:              natsServerURL,
-			AllowReconnect:   true,
-			MaxReconnect:     -1,
-			ReconnectWait:    5 * time.Second,
-			Timeout:          5 * time.Second,
-			ReconnectBufSize: 128 * 1024 * 1024,
-		}
-		nc, err = opts.Connect()
-		if err != nil {
-			log.Printf("can't connect to NATs server: %v", err)
-		}
+	opts := nats.Options{
+		Url:              natsServerURL,
+		AllowReconnect:   true,
+		MaxReconnect:     -1,
+		ReconnectWait:    5 * time.Second,
+		Timeout:          5 * time.Second,
+		ReconnectBufSize: 128 * 1024 * 1024,
+	}
+	nc, err = opts.Connect()
+	if err != nil {
+		log.Printf("can't connect to NATs server: %v", err)
 	}
 
-	return nc
+	if cfg != nil {
+		s, err := micro.AddService(nc, *cfg)
+		if err != nil {
+			return nil, nil, fmt.Errorf("can't add service: %w", err)
+		}
+		svc = &s
+	}
+
+	return
 }

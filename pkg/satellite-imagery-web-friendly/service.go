@@ -14,6 +14,7 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/micro"
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 	"golang.org/x/sync/errgroup"
 )
@@ -22,7 +23,14 @@ func Run(ctx context.Context, tmpDir string) error {
 	log.Printf("starting satellite-imagery-web-friendly service")
 	defer log.Printf("exiting satellite-imagery-web-friendly service")
 
-	nc := shared.NewNATsClient(ctx)
+	nc, _, err := shared.NewNATsClient(ctx, &micro.Config{
+		Name:        "satellite-imagery-web-friendly",
+		Version:     "0.0.1",
+		Description: "Service to convert high resolution images to web friendly images",
+	})
+	if err != nil {
+		return fmt.Errorf("can't create NATs client: %w", err)
+	}
 
 	js, err := nc.JetStream()
 	if err != nil {

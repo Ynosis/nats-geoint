@@ -11,13 +11,21 @@ import (
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/micro"
 )
 
 func Run(ctx context.Context, tmpDir string) error {
 	log.Printf("starting satellite-imagery-pull-feeds service")
 	defer log.Printf("exiting satellite-imagery-pull-feeds service")
 
-	nc := shared.NewNATsClient(ctx)
+	nc, _, err := shared.NewNATsClient(ctx, &micro.Config{
+		Name:        "satellite-imagery-pull-feeds",
+		Version:     "0.0.1",
+		Description: "Service to pull feeds from satellites",
+	})
+	if err != nil {
+		return fmt.Errorf("can't create NATs client: %w", err)
+	}
 
 	js, err := nc.JetStream()
 	if err != nil {
@@ -119,31 +127,4 @@ func Run(ctx context.Context, tmpDir string) error {
 			processEntry(entry)
 		}
 	}
-
-	// //
-	// tmpExt := filepath.Ext(url)
-	// tmpFile := fmt.Sprintf("./data/src/%d%s", id, tmpExt)
-	// tmpFile, err := filepath.Abs(tmpFile)
-	// if err != nil {
-	// 	return fmt.Errorf("can't get absolute path for %s: %w", tmpFile, err)
-	// }
-	// if err := os.MkdirAll(filepath.Dir(tmpFile), 0755); err != nil {
-	// 	return fmt.Errorf("can't create dir for %s: %w", tmpFile, err)
-	// }
-
-	// 		m := &shared.SatelliteMetadata{
-	// 			ID:               id,
-	// 			InitialSourceURL: url,
-	// 		}
-	// 		if _, err := kvMetadata.Put(idStr, m.MustToJSON()); err != nil {
-	// 			return fmt.Errorf("can't put metadata into kv store: %w", err)
-	// 		}
-
-	// 		if _, err := js.Publish(shared.JETSTREAM_SATELLITE_JOBS_CONVERT_RAW_TO_HIREZ, []byte(idStr)); err != nil {
-	// 			return fmt.Errorf("can't publish job to convert raw to highrez: %w", err)
-	// 		}
-	// 	}
-
-	// 	return nil
-
 }

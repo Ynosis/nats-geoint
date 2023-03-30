@@ -1,10 +1,10 @@
 <script setup lang="ts">
   const router = useRouter()
   onMounted(() => {
-    router.push('/demo/imagery')
+    router.push('/demo/services')
   })
 </script>
 
 <template>
-  <div>Foo</div>
+  <div>Loading...</div>
 </template>

@@ -46,6 +46,15 @@
           <!-- Sidebar content here -->
           <li>
             <router-link
+              to="/demo/services"
+              :class="{ active: routeStartsWith('demo-services') }"
+            >
+              <icon-uil:server />
+              Services</router-link
+            >
+          </li>
+          <li>
+            <router-link
               to="/demo/imagery"
               :class="{ active: routeStartsWith('demo-imagery') }"
             >

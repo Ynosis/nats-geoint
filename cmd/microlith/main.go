@@ -120,7 +120,7 @@ func run(ctx context.Context) error {
 
 func createStreams(ctx context.Context) error {
 
-	nc := shared.NewNATsClient(ctx)
+	nc, _, _ := shared.NewNATsClient(ctx, nil)
 	js, err := nc.JetStream()
 	if err != nil {
 		return fmt.Errorf("can't create JetStream context: %w", err)

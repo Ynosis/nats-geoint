@@ -12,12 +12,14 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
 	"github.com/Jeffail/gabs/v2"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/micro"
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 	"golang.org/x/exp/slices"
 )
@@ -26,7 +28,26 @@ func Run(ctx context.Context, tmpDir string) error {
 	log.Printf("starting satellite-imagery-hirez service")
 	defer log.Printf("exiting satellite-imagery-hirez service")
 
-	nc := shared.NewNATsClient(ctx)
+	type HiRezStats struct {
+		VideosProcessed int `json:"videosProcessed"`
+		AverageWidth    int `json:"averageWidth"`
+		AverageHeight   int `json:"averageHeight"`
+	}
+	statsMu := sync.RWMutex{}
+	stats := &HiRezStats{}
+	nc, _, err := shared.NewNATsClient(ctx, &micro.Config{
+		Name:        "satellite-imagery-hirez",
+		Version:     "0.0.1",
+		Description: "Service to convert video to high resolution images",
+		StatsHandler: func(e *micro.Endpoint) interface{} {
+			statsMu.RLock()
+			defer statsMu.RUnlock()
+			return stats
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("can't create NATs client: %w", err)
+	}
 
 	js, err := nc.JetStream()
 	if err != nil {
@@ -63,6 +84,8 @@ func Run(ctx context.Context, tmpDir string) error {
 	if err := os.MkdirAll(hiRezTmpFeedDir, 0755); err != nil {
 		return fmt.Errorf("can't create temp directory: %w", err)
 	}
+
+	totalWidth, totalHeight, totalCount := 0, 0, 0
 
 	convertRawToHirez := func(videoFeedID string) error {
 		feedFile := fmt.Sprintf("%s/%s", hiRezTmpFeedDir, videoFeedID)
@@ -249,8 +272,20 @@ func Run(ctx context.Context, tmpDir string) error {
 				if _, err := metadataKVStore.Put(videoFeedID, m.MustToJSON()); err != nil {
 					return fmt.Errorf("can't put metadata to key value store: %w", err)
 				}
+
+				totalWidth += m.HiRez.OrginalResolutionWidth
+				totalHeight += m.HiRez.OrginalResolutionHeight
+				totalCount++
+				statsMu.Lock()
+				stats.AverageWidth = totalWidth / totalCount
+				stats.AverageHeight = totalHeight / totalCount
+				statsMu.Unlock()
 			}
 		}
+
+		statsMu.Lock()
+		stats.VideosProcessed++
+		statsMu.Unlock()
 
 		return nil
 	}

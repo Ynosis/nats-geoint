@@ -5,30 +5,21 @@
     natsJetstreamClient,
     natsKVClient,
   } from '@/shared/nats'
-  import { rand } from '@vueuse/core'
-  import { randomUUID } from 'crypto'
-  import {
-    consumerOpts,
-    DeliverPolicy,
-    JetStreamPullSubscription,
-    JetStreamSubscription,
-  } from 'nats.ws'
-  import { validName } from 'nats.ws/lib/nats-base-client/jsutil'
+  import { useRafFn } from '@vueuse/core'
+  import { consumerOpts } from 'nats.ws'
   import Feature from 'ol/Feature'
-  import { Circle, Geometry, Point } from 'ol/geom'
+  import { Point } from 'ol/geom'
   import TileLayer from 'ol/layer/Tile'
   import VectorLayer from 'ol/layer/Vector'
   import OLMap from 'ol/Map'
   import { fromLonLat } from 'ol/proj'
   import VectorSource from 'ol/source/Vector'
   import XYZ from 'ol/source/XYZ'
-  import View from 'ol/View'
-  import { useRafFn } from '@vueuse/core'
-  import Style from 'ol/style/Style'
-  import Fill from 'ol/style/Fill'
   import CircleStyle from 'ol/style/Circle'
+  import Fill from 'ol/style/Fill'
+  import Style from 'ol/style/Style'
   import TextStyle from 'ol/style/Text'
-  import Stroke from 'ol/style/Stroke'
+  import View from 'ol/View'
 
   const mapRef = ref<HTMLDivElement>()
 

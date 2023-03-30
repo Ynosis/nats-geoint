@@ -13,6 +13,7 @@ import (
 	"github.com/goccy/go-json"
 	sat "github.com/joshuaferrara/go-satellite"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/micro"
 	"github.com/pinzolo/casee"
 )
 
@@ -55,7 +56,15 @@ type position struct {
 }
 
 func Run(ctx context.Context) error {
-	nc := shared.NewNATsClient(ctx)
+	nc, _, err := shared.NewNATsClient(ctx, &micro.Config{
+		Name:        "satallite-tracking",
+		Version:     "0.0.1",
+		Description: "Generate telemetry for satallites from TLE data",
+	})
+	if err != nil {
+		return fmt.Errorf("can't create NATs client: %w", err)
+	}
+
 	js, err := nc.JetStream()
 	if err != nil {
 		return fmt.Errorf("can't get jetstream: %w", err)
@@ -125,7 +134,7 @@ func Run(ctx context.Context) error {
 
 	satallites = satallites[:100]
 
-	log.Printf("found %d satallites", len(satallites))
+	// log.Printf("found %d satallites", len(satallites))
 
 	satTrackingSubjectPrefix := "sat.tracking"
 
@@ -186,8 +195,8 @@ func Run(ctx context.Context) error {
 				}
 			}
 
-			took := time.Since(now)
-			log.Printf("%d positions in %s", len(satallites), took)
+			// took := time.Since(now)
+			// log.Printf("%d positions in %s", len(satallites), took)
 		}
 	}
 }

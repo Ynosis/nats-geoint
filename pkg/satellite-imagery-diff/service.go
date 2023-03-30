@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"image/png"
 	"log"
+	"sync"
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
 	"github.com/corona10/goimagehash"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/micro"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -18,7 +20,27 @@ func Run(ctx context.Context) error {
 	log.Printf("starting satellite-imagery-web-friendly service")
 	defer log.Printf("exiting satellite-imagery-web-friendly service")
 
-	nc := shared.NewNATsClient(ctx)
+	type WebFriendStats struct {
+		ImagesConverted int `json:"totalFullConverted,omitempty"`
+		HashCacheSize   int `json:"totalHashCacheSize,omitempty"`
+		HashCacheHits   int `json:"totalHashCacheHits,omitempty"`
+		HashRequests    int `json:"totalHashRequests,omitempty"`
+	}
+	statsMu := sync.RWMutex{}
+	stats := &WebFriendStats{}
+	nc, _, err := shared.NewNATsClient(ctx, &micro.Config{
+		Name:        "satellite-imagery-web-friendly",
+		Version:     "0.0.1",
+		Description: "Service to convert satellite imagery to web friendly images",
+		StatsHandler: func(e *micro.Endpoint) interface{} {
+			statsMu.RLock()
+			defer statsMu.RUnlock()
+			return stats
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("can't create NATs client: %w", err)
+	}
 
 	js, err := nc.JetStream()
 	if err != nil {
@@ -73,6 +95,9 @@ func Run(ctx context.Context) error {
 
 			// Check if we have the hash in the cache
 			if hashes, ok := hashCache.Get(id); ok {
+				statsMu.Lock()
+				stats.HashCacheHits++
+				statsMu.Unlock()
 				return &hashes, nil
 			}
 
@@ -109,6 +134,10 @@ func Run(ctx context.Context) error {
 			}
 
 			hashCache.Add(id, hash)
+
+			statsMu.Lock()
+			stats.HashCacheSize = hashCache.Len()
+			statsMu.Unlock()
 
 			// goimagehash.Hash
 			return &hash, nil
@@ -151,6 +180,10 @@ func Run(ctx context.Context) error {
 		if err := msg.Respond(res.MustToJSON()); err != nil {
 			log.Printf("can't respond to request: %v", err)
 		}
+
+		statsMu.Lock()
+		stats.HashCacheHits++
+		statsMu.Unlock()
 	})
 	if err != nil {
 		return fmt.Errorf("can't subscribe to subject: %w", err)
