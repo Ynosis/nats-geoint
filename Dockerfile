@@ -11,9 +11,12 @@ RUN go build -o /bin/app cmd/microlith/main.go
 CMD ["/bin/app"]
 
 # Deployment
-FROM docker.io/alpine:3.17.2
+FROM docker.io/ubuntu
 
-RUN apk add --no-cache ffmpeg curl
+RUN apt-get update && apt-get install -y ffmpeg curl
+RUN  apt-get clean autoclean
+RUN apt-get autoremove --yes
+RUN rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 WORKDIR /server
 COPY --from=builder /bin/app app
