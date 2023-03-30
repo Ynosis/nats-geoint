@@ -13,10 +13,13 @@ CMD ["/bin/app"]
 # Deployment
 FROM docker.io/alpine:3.17.2
 
-RUN apk add --no-cache ffmpeg
+RUN apk add --no-cache ffmpeg curl
 
 WORKDIR /server
 COPY --from=builder /bin/app app
-COPY --from=builder /build/assets assets
+
+EXPOSE 80 4443 4442 6662 8882
+
+HEALTHCHECK CMD curl --fail http://localhost || exit 1  
 
 CMD ["/server/app"]

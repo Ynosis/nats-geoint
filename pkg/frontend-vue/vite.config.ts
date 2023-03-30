@@ -1,12 +1,12 @@
-import { defineConfig } from 'vite';
-import Vue from '@vitejs/plugin-vue'
+import Vue from '@vitejs/plugin-vue';
 import { resolve } from 'path';
-import Pages from 'vite-plugin-pages'
-import Components from 'unplugin-vue-components/vite';
-import Icons from 'unplugin-icons/vite';
+import AutoImport from 'unplugin-auto-import/vite';
 import IconsResolver from 'unplugin-icons/resolver';
-import { VitePWA } from 'vite-plugin-pwa';
-import AutoImport from 'unplugin-auto-import/vite'
+import Icons from 'unplugin-icons/vite';
+import Components from 'unplugin-vue-components/vite';
+import { defineConfig } from 'vite';
+import Pages from 'vite-plugin-pages';
+// import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -45,7 +45,7 @@ export default defineConfig({
 
 
 
-    VitePWA(),
+    // VitePWA(),
   ],
   resolve: {
     alias: {
@@ -61,7 +61,9 @@ export default defineConfig({
     include: ['vue', 'vue-router', '@vueuse/core', '@vueuse/head'],
   },
 
-  build:{
-    outDir: 'dist',
+  build: {
+    target: 'esnext',
+    outDir: '../frontend-server/www',
+    emptyOutDir: true,
   }
 });

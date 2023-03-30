@@ -9,6 +9,7 @@ import (
 	"runtime/pprof"
 
 	embeddednats "github.com/ConnectEverything/sales-poc-accenture/pkg/embedded-nats"
+	frontendserver "github.com/ConnectEverything/sales-poc-accenture/pkg/frontend-server"
 	satelliteimagerydiff "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-diff"
 	satelliteimageryhirez "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-hirez"
 	satelliteimagerymetadata "github.com/ConnectEverything/sales-poc-accenture/pkg/satellite-imagery-metadata"
@@ -72,6 +73,12 @@ func run(ctx context.Context) error {
 	}
 
 	eg, setupCtx := errgroup.WithContext(ctx)
+
+	if stage == "all" || stage == "frontend" {
+		eg.Go(func() error {
+			return frontendserver.Run(setupCtx)
+		})
+	}
 
 	if stage == "all" || stage == "imagery" || stage == "imagery-metadata" {
 		eg.Go(func() error {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-  import { ref, onMounted } from 'vue'
-  import { useHead } from '@vueuse/head'
   import logoURL from '@/assets/synadia_wt_letters.svg'
+  import { useHead } from '@vueuse/head'
+  import { onMounted, ref } from 'vue'
 
   const title = 'Space Stat Demo'
   useHead({
@@ -13,6 +13,8 @@
       },
     ],
   })
+
+  const baseURL = import.meta.env.BASE_URL
 
   const starFieldRef = ref<HTMLCanvasElement>()
 

@@ -1,10 +1,14 @@
-import { connect } from 'nats.ws'
 import JSONbig from 'json-bigint'
+import { connect } from 'nats.ws'
 
-const natsURL = import.meta.env.VITE_NATS_URL
+export const natsURL = ref(`ws://${window.location.hostname}:4443`)
 if (!natsURL) throw new Error('VITE_NATS_URL is not set')
 
-const nc = await connect({ servers: [import.meta.env.VITE_NATS_URL] })
+let nc = connect({ servers: [natsURL.value] })
+watch(natsURL, () => {
+	nc = connect({ servers: [natsURL.value] })
+	window.location.reload()
+})
 
 export async function natsClient() {
 	while (!nc) {

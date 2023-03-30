@@ -1,5 +1,6 @@
 <script setup lang="ts">
   import logoURL from '@/assets/synadia_wt_letters.svg'
+  import { natsClient } from '@/shared/nats'
   import { useHead } from '@vueuse/head'
   useHead({
     title: 'Demo',
@@ -8,6 +9,13 @@
   const router = useRouter()
   const routeName = computed(() => router.currentRoute.value.name)
   const routeStartsWith = (name: string) => routeName.value?.startsWith(name)
+
+  const killContainer = async () => {
+    const nc = await natsClient()
+    await nc.publish('kill-container')
+    router.push('/')
+    window.location.reload()
+  }
 </script>
 
 <template>
@@ -29,9 +37,23 @@
           </div>
         </router-link>
       </div>
-      <div class="font-mono text-xl font-bold">#justusenats</div>
       <div>
-        <img class="h-4" :src="logoURL" />
+        <div class="flex items-center justify-between flex-1 gap-2">
+          <button
+            class="btn btn-error btn-outline btn-xs"
+            @click="killContainer"
+          >
+            <icon-mdi:stop />
+            Stop Demo*
+          </button>
+          <div class="text-xs italic opacity-75">*will reset container</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="font-mono font-bold">#justusenats</div>
+        <a href="https://synadia.com/">
+          <img class="h-4" :src="logoURL" />
+        </a>
       </div>
     </div>
     <div class="drawer drawer-mobile bg-base-200">
