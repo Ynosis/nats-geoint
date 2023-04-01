@@ -181,13 +181,13 @@ func Run(ctx context.Context, tmpDir string) error {
 						if progress == "0%" {
 							continue
 						}
-						e, err := metadataKVStore.Get(videoFeedID)
-						if err != nil {
-							log.Printf("can't get metadata from key value store: %v", err)
-							continue
-						}
-
 						for {
+							e, err := metadataKVStore.Get(videoFeedID)
+							if err != nil {
+								log.Printf("can't get metadata from key value store: %v", err)
+								continue
+							}
+
 							m := shared.MustSatelliteMetadataFromJSON(e.Value())
 							m.HiRez.ConversionProgress = progress
 							if _, err := metadataKVStore.Update(videoFeedID, m.MustToJSON(), e.Revision()); err != nil {

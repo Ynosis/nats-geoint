@@ -27,11 +27,11 @@ func Run(ctx context.Context) error {
 	})
 
 	var staticFS = fs.FS(staticFiles)
-	htmlContent, err := fs.Sub(staticFS, "www")
+	fileContent, err := fs.Sub(staticFS, "www")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fs := http.FileServer(http.FS(htmlContent))
+	fs := http.FileServer(http.FS(fileContent))
 
 	// Serve static files
 	http.Handle("/", fs)
