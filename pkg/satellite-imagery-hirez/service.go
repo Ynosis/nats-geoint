@@ -129,7 +129,7 @@ func Run(ctx context.Context, tmpDir string) error {
 			m.HiRez.OrginalResolutionWidth = int(width)
 			m.HiRez.OrginalResolutionHeight = int(height)
 			if _, err := metadataKVStore.Update(videoFeedID, m.MustToJSON(), metadataEntry.Revision()); err != nil {
-				log.Printf("can't update metadata: %v, retrying", err)
+				// log.Printf("can't update metadata: %v, retrying", err)
 			} else {
 				break
 			}
@@ -191,13 +191,13 @@ func Run(ctx context.Context, tmpDir string) error {
 							m := shared.MustSatelliteMetadataFromJSON(e.Value())
 							m.HiRez.ConversionProgress = progress
 							if _, err := metadataKVStore.Update(videoFeedID, m.MustToJSON(), e.Revision()); err != nil {
-								log.Printf("can't update metadata: %v, retrying", err)
+								// log.Printf("can't update metadata: %v, retrying", err)
 							} else {
 								break
 							}
 						}
 
-						fmt.Println("progress: ", progress)
+						// fmt.Println("progress: ", progress)
 					}
 				}
 			}()
@@ -212,10 +212,12 @@ func Run(ctx context.Context, tmpDir string) error {
 					"pix_fmt":          "rgb24",
 					"compression_algo": "lzw",
 					"filter:v":         "scale=2048:-1",
+					"loglevel":         "quiet",
 				},
 			).
 			GlobalArgs("-progress", "unix://"+tempSock()).
 			OverWriteOutput()
+
 		if err := process.Run(); err != nil {
 			return fmt.Errorf("can't convert raw bytes to hirez: %w", err)
 		}
@@ -307,7 +309,7 @@ func Run(ctx context.Context, tmpDir string) error {
 
 			for _, msg := range msgs {
 				videoFeedID := string(msg.Data)
-				log.Printf("Received message: %s", videoFeedID)
+				// log.Printf("Received message: %s", videoFeedID)
 
 				if err := convertRawToHirez(videoFeedID); err != nil {
 					log.Printf("can't convert raw bytes to hirez: %v", err)

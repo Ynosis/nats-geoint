@@ -86,7 +86,7 @@ func Run(ctx context.Context) error {
 				return
 			}
 
-			log.Printf("added metadata for %s", videoURL)
+			// log.Printf("added metadata for %s", videoURL)
 		}
 
 		statsMu.Lock()

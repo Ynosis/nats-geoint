@@ -82,6 +82,7 @@ func Run(ctx context.Context, tmpDir string) error {
 			process := ffmpeg.Input(hiRezPath).
 				Output(fullPathWithExt, ffmpeg.KwArgs{
 					"filter:v": "scale=1024:-1",
+					"loglevel": "quiet",
 				}).
 				OverWriteOutput()
 
@@ -107,6 +108,7 @@ func Run(ctx context.Context, tmpDir string) error {
 			process := ffmpeg.Input(hiRezPath).
 				Output(thumbnailPathWithExt, ffmpeg.KwArgs{
 					"filter:v": "scale=256:-1",
+					"loglevel": "quiet",
 				}).
 				OverWriteOutput()
 
@@ -180,7 +182,7 @@ func Run(ctx context.Context, tmpDir string) error {
 
 			metadata.WebFriendly.FrameCount = metadata.HiRez.FrameCount
 			if _, err := metadataKVStore.Update(videoFeedID, metadata.MustToJSON(), entry.Revision()); err != nil {
-				log.Printf("Can't update metadata: %v, retrying", err)
+				// log.Printf("Can't update metadata: %v, retrying", err)
 			} else {
 				break
 			}

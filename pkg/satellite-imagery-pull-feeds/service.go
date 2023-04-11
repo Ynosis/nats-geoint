@@ -67,7 +67,7 @@ func Run(ctx context.Context, tmpDir string) error {
 		tmpFile := filepath.Join(pullDataTmpDir, santizedFilename)
 
 		if stat, err := os.Stat(tmpFile); err != nil || stat.Size() == 0 {
-			log.Printf("downloading %s with hash %d", m.InitialSourceURL, m.ID)
+			// log.Printf("downloading %s with hash %d", m.InitialSourceURL, m.ID)
 			res, err := http.DefaultClient.Get(m.InitialSourceURL)
 			if err != nil {
 				return fmt.Errorf("can't get file %s: %w", m.InitialSourceURL, err)
@@ -89,7 +89,7 @@ func Run(ctx context.Context, tmpDir string) error {
 			}
 		} else {
 			m.PullFromFeed.WasCached = true
-			log.Printf("file %s already exists, skipping download", tmpFile)
+			// log.Printf("file %s already exists, skipping download", tmpFile)
 		}
 
 		tmpFileBytes, err := os.ReadFile(tmpFile)

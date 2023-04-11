@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"log"
 	"math"
 	"strings"
 	"time"
@@ -116,9 +115,9 @@ func Run(ctx context.Context) error {
 			}
 		}
 
-		if id == "" {
-			log.Printf("no metadata found for %q", name)
-		}
+		// if id == "" {
+		// 	log.Printf("no metadata found for %q", name)
+		// }
 
 		line1 := rows[i+1]
 		line2 := rows[i+2]
@@ -188,8 +187,6 @@ func Run(ctx context.Context) error {
 				b, _ := json.Marshal(p)
 				// log.Print(len(b))
 				subject := fmt.Sprintf("%s.%s", satTrackingSubjectPrefix, s.ID)
-				// subject := fmt.Sprintf("%s.sats", satTrackingSubjectPrefix) // For @derek
-
 				if _, err := js.PublishAsync(subject, b); err != nil {
 					return fmt.Errorf("can't publish: %w", err)
 				}

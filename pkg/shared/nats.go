@@ -36,6 +36,7 @@ func NewNATsClient(ctx context.Context, cfg *micro.Config) (nc *nats.Conn, svc *
 		if err != nil {
 			return nil, nil, fmt.Errorf("can't add service: %w", err)
 		}
+		log.Printf("service '%s' registered", cfg.Name)
 		svc = &s
 	}
 
