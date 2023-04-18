@@ -26,7 +26,7 @@
   const [nc, js, kvMetadata] = await Promise.all([
     natsClient(),
     natsJetstreamClient(),
-    natsKVClient('SatalliteTrackingMetadata'),
+    natsKVClient('SatelliteTrackingMetadata'),
   ])
 
   interface satelliteMetadata {
@@ -202,7 +202,7 @@
       <div class="flex justify-end">
         <div class="form-control">
           <label class="gap-2 cursor-pointer label">
-            <span class="text-right label-text">Declutter</span>
+            <span class="text-right label-text">v0.0.2 Declutter</span>
             <input type="checkbox" v-model="shouldDeclutter" class="checkbox" />
           </label>
         </div>

@@ -70,7 +70,7 @@ func Run(ctx context.Context) error {
 	}
 
 	kv, err := js.CreateKeyValue(&nats.KeyValueConfig{
-		Bucket: "SatalliteTrackingMetadata",
+		Bucket: "SatelliteTrackingMetadata",
 	})
 	if err != nil {
 		return fmt.Errorf("can't create kv: %w", err)
@@ -145,12 +145,12 @@ func Run(ctx context.Context) error {
 
 	// maxMsgsPerSubject := int64(8000)
 
-	if err := js.DeleteStream("SatalliteTracking"); err != nil && err != nats.ErrStreamNotFound {
+	if err := js.DeleteStream("SatelliteTracking"); err != nil && err != nats.ErrStreamNotFound {
 		return fmt.Errorf("can't delete stream: %w", err)
 	}
 
 	if _, err := js.AddStream(&nats.StreamConfig{
-		Name:     "SatalliteTracking",
+		Name:     "SatelliteTracking",
 		Subjects: []string{satTrackingSubjectPrefix + ".>"},
 		// MaxMsgsPerSubject: maxMsgsPerSubject,
 		Retention: nats.LimitsPolicy,
