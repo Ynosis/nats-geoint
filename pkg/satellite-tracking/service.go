@@ -10,7 +10,7 @@ import (
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
 	"github.com/goccy/go-json"
-	sat "github.com/joshuaferrara/go-satellite"
+	sat "github.com/jsmorph/go-satellite"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/micro"
 	"github.com/pinzolo/casee"
@@ -121,17 +121,23 @@ func Run(ctx context.Context) error {
 
 		line1 := rows[i+1]
 		line2 := rows[i+2]
-		tle := sat.ParseTLE(line1, line2, sat.GravityWGS84)
+		tle, err := sat.ParseTLE(line1, line2, "wgs84")
+		if err != nil {
+			return fmt.Errorf("can't parse tle: %w", err)
+		}
+		if tle == nil {
+			return fmt.Errorf("can't parse tle: nil")
+		}
 
 		s := satallite{
 			ID:   id,
 			Name: name,
-			TLE:  tle,
+			TLE:  *tle,
 		}
 		satallites = append(satallites, s)
 	}
 
-	satallites = satallites[:100]
+	satallites = satallites[:1000]
 
 	// log.Printf("found %d satallites", len(satallites))
 
@@ -164,22 +170,17 @@ func Run(ctx context.Context) error {
 		case <-t.C:
 			now := time.Now()
 			jd := timeToJulianDay(now)
-
 			gmst := sat.ThetaG_JD(jd)
-
-			year := now.Year()
-			month := int(now.Month())
-			day := now.Day()
-			hour := now.Hour()
-			minute := now.Minute()
-			second := now.Second()
 
 			// s := satallites[rand.Intn(len(satallites))]
 
 			for _, s := range satallites {
-				eci, _ := sat.Propagate(s.TLE, year, month, day, hour, minute, second)
+				eci, _ := sat.PropagateJDay(s.TLE, jd)
 				alt, _, llRad := sat.ECIToLLA(eci, gmst)
-				ll := sat.LatLongDeg(llRad)
+				ll, err := sat.LatLongDeg(llRad)
+				if err != nil {
+					return fmt.Errorf("can't convert to lat long: %w", err)
+				}
 
 				p.LongitudeDeg = ll.Longitude
 				p.LatitudeDeg = ll.Latitude

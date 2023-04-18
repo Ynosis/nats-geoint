@@ -15,7 +15,7 @@ func NewNATsClient(ctx context.Context, cfg *micro.Config) (nc *nats.Conn, svc *
 
 	natsServerURL, exists := os.LookupEnv("NATS_SERVER_URL")
 	if !exists {
-		panic("NATS_SERVER_URL not set")
+		natsServerURL = nats.DefaultURL
 	}
 
 	opts := nats.Options{

@@ -9,7 +9,6 @@ require (
 	github.com/corona10/goimagehash v1.1.0
 	github.com/goccy/go-json v0.10.2
 	github.com/hashicorp/golang-lru/v2 v2.0.2
-	github.com/joshuaferrara/go-satellite v0.0.0-20220611180459-512638c64e5b
 	github.com/nats-io/nats-server/v2 v2.9.15
 	github.com/nats-io/nats.go v1.25.0
 	github.com/pinzolo/casee v1.0.0
@@ -22,8 +21,8 @@ require (
 	github.com/aws/aws-sdk-go v1.38.20 // indirect
 	github.com/fatih/camelcase v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/onsi/ginkgo v1.2.1-0.20160509182050-5437a97bf824 // indirect
 	github.com/onsi/gomega v1.23.0 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/stretchr/testify v1.8.0 // indirect
 	github.com/u2takey/go-utils v0.3.1 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
@@ -31,6 +30,7 @@ require (
 )
 
 require (
+	github.com/jsmorph/go-satellite v0.0.0-20200209185444-f2e743f52cab
 	github.com/klauspost/compress v1.16.0 // indirect
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/nats-io/jwt/v2 v2.3.0 // indirect
