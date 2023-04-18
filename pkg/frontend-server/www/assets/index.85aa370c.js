@@ -1,0 +1,1 @@
+import{d as o,b as n,c as s,x as t,o as r}from"./vendor.d5740e8b.js";const p=o({__name:"index",setup(a){const e=t();return n(()=>{e.push("/demo/services")}),(c,u)=>(r(),s("div",null,"Loading..."))}});export{p as default};
