@@ -50,20 +50,26 @@
   }
 
   const metadatas = ref(new Map<string, satelliteMetadata>())
-  const sortedMetadata = computed(() => {
-    const values = [...metadatas.value.values()]
-    values.sort((a, b) => {
-      if (a.OBJECT_NAME && !b.OBJECT_NAME) {
-        return -1
-      } else if (!a.OBJECT_NAME && b.OBJECT_NAME) {
-        return 1
-      } else if (a.OBJECT_NAME && b.OBJECT_NAME) {
-        return a.OBJECT_NAME.localeCompare(b.OBJECT_NAME)
-      }
-      return 0
-    })
-    return values
-  })
+  const sortedMetadata = ref<satelliteMetadata[]>([])
+
+  watchDebounced(
+    metadatas,
+    () => {
+      const values = [...metadatas.value.values()]
+      values.sort((a, b) => {
+        if (a.OBJECT_NAME && !b.OBJECT_NAME) {
+          return -1
+        } else if (!a.OBJECT_NAME && b.OBJECT_NAME) {
+          return 1
+        } else if (a.OBJECT_NAME && b.OBJECT_NAME) {
+          return a.OBJECT_NAME.localeCompare(b.OBJECT_NAME)
+        }
+        return 0
+      })
+      sortedMetadata.value = values
+    },
+    { debounce: 500, maxWait: 1000 },
+  )
 
   const style = new Style({
     image: new CircleStyle({
@@ -202,7 +208,7 @@
       <div class="flex justify-end">
         <div class="form-control">
           <label class="gap-2 cursor-pointer label">
-            <span class="text-right label-text">v0.0.2 Declutter</span>
+            <span class="text-right label-text">v0.0.3 Declutter</span>
             <input type="checkbox" v-model="shouldDeclutter" class="checkbox" />
           </label>
         </div>
@@ -229,7 +235,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(m, i) in sortedMetadata.slice(0, 15)">
+          <tr v-for="(m, i) in sortedMetadata">
             <td>{{ m.OBJECT_ID }}</td>
             <td>{{ m.OBJECT_NAME }}</td>
             <td>{{ sortedPositions[i].longitudeDeg.toFixed(2) }}</td>
