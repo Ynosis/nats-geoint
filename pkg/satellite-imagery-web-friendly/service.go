@@ -81,7 +81,7 @@ func Run(ctx context.Context, tmpDir string) error {
 		fullPathWithExt := fullPath + ext
 		eg.Go(func() error {
 			process := ffmpeg.Input(hiRezPath).
-				Silent(true).
+				// Silent(true).
 				Output(fullPathWithExt, ffmpeg.KwArgs{
 					"filter:v": "scale=1024:-1",
 					"loglevel": "quiet",
@@ -108,13 +108,12 @@ func Run(ctx context.Context, tmpDir string) error {
 		thumbnailPathWithExt := thumbnailPath + ext
 		eg.Go(func() error {
 			process := ffmpeg.Input(hiRezPath).
-				Silent(true).
+				// Silent(true).
 				Output(thumbnailPathWithExt, ffmpeg.KwArgs{
 					"filter:v": "scale=256:-1",
 					"loglevel": "quiet",
 				}).
 				OverWriteOutput()
-
 			if err := process.Run(); err != nil {
 				return fmt.Errorf("can't run ffmpeg: %w", err)
 			}

@@ -100,7 +100,7 @@ func run(ctx context.Context) error {
 	}
 
 	if stage == "all" || stage == "imagery" || stage == "imagery-web-friendly" {
-		for i := 0; i < 1; i++ {
+		for i := 0; i < 4; i++ {
 			eg.Go(func() error {
 				return satelliteimagerywebfriendly.Run(setupCtx, tmpDir)
 			})

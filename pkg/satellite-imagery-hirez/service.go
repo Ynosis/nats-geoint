@@ -207,7 +207,7 @@ func Run(ctx context.Context, tmpDir string) error {
 
 		outputFmt := fmt.Sprintf("%s/%%05d.png", hiRezImagesDir)
 		process := ffmpeg.Input(feedFile).
-			Silent(true).
+			// Silent(true).
 			Output(outputFmt,
 				ffmpeg.KwArgs{
 					"pix_fmt":          "rgb24",
@@ -218,7 +218,6 @@ func Run(ctx context.Context, tmpDir string) error {
 			).
 			GlobalArgs("-progress", "unix://"+tempSock()).
 			OverWriteOutput()
-
 		if err := process.Run(); err != nil {
 			return fmt.Errorf("can't convert raw bytes to hirez: %w", err)
 		}
