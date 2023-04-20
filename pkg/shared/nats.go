@@ -22,8 +22,8 @@ func NewNATsClient(ctx context.Context, cfg *micro.Config) (nc *nats.Conn, svc *
 		Url:              natsServerURL,
 		AllowReconnect:   true,
 		MaxReconnect:     -1,
-		ReconnectWait:    5 * time.Second,
-		Timeout:          5 * time.Second,
+		ReconnectWait:    30 * time.Minute,
+		Timeout:          30 * time.Minute,
 		ReconnectBufSize: 128 * 1024 * 1024,
 	}
 	nc, err = opts.Connect()

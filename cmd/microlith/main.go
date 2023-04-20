@@ -58,7 +58,7 @@ func run(ctx context.Context) error {
 	}
 
 	if stage == "all" {
-		os.Setenv("NATS_SERVER_URL", "nats://localhost:4222")
+		os.Setenv("NATS_SERVER_URL", nats.DefaultURL)
 
 		natsSrv, err := embeddednats.NewNatsEmbeddedNATsServer(ctx, true)
 		if err != nil {
@@ -72,7 +72,8 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("can't create streams: %w", err)
 	}
 
-	eg, setupCtx := errgroup.WithContext(ctx)
+	eg := errgroup.Group{}
+	setupCtx := ctx
 
 	if stage == "all" || stage == "frontend" {
 		eg.Go(func() error {
@@ -99,7 +100,7 @@ func run(ctx context.Context) error {
 	}
 
 	if stage == "all" || stage == "imagery" || stage == "imagery-web-friendly" {
-		for i := 0; i < 4; i++ {
+		for i := 0; i < 1; i++ {
 			eg.Go(func() error {
 				return satelliteimagerywebfriendly.Run(setupCtx, tmpDir)
 			})
@@ -174,6 +175,7 @@ func createStreams(ctx context.Context) error {
 			if _, err := js.CreateObjectStore(&nats.ObjectStoreConfig{
 				Bucket:      stream.Bucket,
 				Description: stream.Description,
+				Storage:     nats.MemoryStorage,
 			}); err != nil {
 				return fmt.Errorf("can't create object store: %w", err)
 			}
@@ -181,6 +183,7 @@ func createStreams(ctx context.Context) error {
 			if _, err := js.CreateKeyValue(&nats.KeyValueConfig{
 				Bucket:      stream.Bucket,
 				Description: stream.Description,
+				Storage:     nats.MemoryStorage,
 			}); err != nil {
 				return fmt.Errorf("can't create key value store: %w", err)
 			}

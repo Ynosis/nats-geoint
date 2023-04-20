@@ -8,10 +8,11 @@
   import { useRafFn } from '@vueuse/core'
   import { consumerOpts } from 'nats.ws'
   import Feature from 'ol/Feature'
+  import OLMap from 'ol/Map'
+  import View from 'ol/View'
   import { Point } from 'ol/geom'
   import TileLayer from 'ol/layer/Tile'
   import VectorLayer from 'ol/layer/Vector'
-  import OLMap from 'ol/Map'
   import { fromLonLat } from 'ol/proj'
   import VectorSource from 'ol/source/Vector'
   import XYZ from 'ol/source/XYZ'
@@ -19,7 +20,6 @@
   import Fill from 'ol/style/Fill'
   import Style from 'ol/style/Style'
   import TextStyle from 'ol/style/Text'
-  import View from 'ol/View'
 
   const mapRef = ref<HTMLDivElement>()
 
@@ -50,26 +50,20 @@
   }
 
   const metadatas = ref(new Map<string, satelliteMetadata>())
-  const sortedMetadata = ref<satelliteMetadata[]>([])
-
-  watchDebounced(
-    metadatas,
-    () => {
-      const values = [...metadatas.value.values()]
-      values.sort((a, b) => {
-        if (a.OBJECT_NAME && !b.OBJECT_NAME) {
-          return -1
-        } else if (!a.OBJECT_NAME && b.OBJECT_NAME) {
-          return 1
-        } else if (a.OBJECT_NAME && b.OBJECT_NAME) {
-          return a.OBJECT_NAME.localeCompare(b.OBJECT_NAME)
-        }
-        return 0
-      })
-      sortedMetadata.value = values
-    },
-    { debounce: 500, maxWait: 1000 },
-  )
+  const sortedMetadata = computed(() => {
+    const values = Array.from(metadatas.value.values())
+    values.sort((a, b) => {
+      if (a.OBJECT_NAME && !b.OBJECT_NAME) {
+        return -1
+      } else if (!a.OBJECT_NAME && b.OBJECT_NAME) {
+        return 1
+      } else if (a.OBJECT_NAME && b.OBJECT_NAME) {
+        return a.OBJECT_NAME.localeCompare(b.OBJECT_NAME)
+      }
+      return 0
+    })
+    return values.slice(0, 10)
+  })
 
   const style = new Style({
     image: new CircleStyle({
@@ -216,11 +210,11 @@
       <div ref="mapRef" class="h-full" />
     </div>
     <div>
-      <table class="table w-full">
+      <table class="table w-full mt-8">
         <caption>
           Satellites
           {{
-            sortedMetadata.length
+            metadatas.size
           }}
         </caption>
         <thead>
@@ -229,7 +223,7 @@
             <th>Name</th>
             <th>Longitude</th>
             <th>Latitude</th>
-            <th>Epoch</th>
+            <th>Altitude (KM)</th>
             <th>Inclination</th>
             <th>Mean Anomaly</th>
           </tr>
@@ -238,9 +232,21 @@
           <tr v-for="(m, i) in sortedMetadata">
             <td>{{ m.OBJECT_ID }}</td>
             <td>{{ m.OBJECT_NAME }}</td>
-            <td>{{ sortedPositions[i].longitudeDeg.toFixed(2) }}</td>
-            <td>{{ sortedPositions[i].latitudeDeg.toFixed(2) }}</td>
-            <td>{{ m.EPOCH }}</td>
+            <td
+              class="font-mono text-sm font-bold text-center opacity-75 text-secondary"
+            >
+              {{ sortedPositions[i].longitudeDeg.toFixed(4) }}
+            </td>
+            <td
+              class="font-mono text-sm font-bold text-center opacity-75 text-secondary"
+            >
+              {{ sortedPositions[i].latitudeDeg.toFixed(4) }}
+            </td>
+            <td
+              class="font-mono text-sm font-bold text-center opacity-75 text-secondary"
+            >
+              {{ sortedPositions[i].altitudeKm.toFixed(4) }}
+            </td>
             <td>{{ m.INCLINATION }}</td>
             <td>{{ m.MEAN_ANOMALY }}</td>
           </tr>

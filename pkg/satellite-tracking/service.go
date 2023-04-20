@@ -4,13 +4,12 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	"github.com/ConnectEverything/sales-poc-accenture/pkg/shared"
+	sgp4 "github.com/SharkEzz/sgp4"
 	"github.com/goccy/go-json"
-	sat "github.com/jsmorph/go-satellite"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/micro"
 	"github.com/pinzolo/casee"
@@ -45,7 +44,9 @@ type satelliteMetadata struct {
 type satallite struct {
 	ID   string
 	Name string
-	TLE  sat.Satellite
+	// TLE  sat.Satellite
+	TLE  *sgp4.TLE
+	SGP4 *sgp4.SGP4
 }
 
 type position struct {
@@ -121,7 +122,7 @@ func Run(ctx context.Context) error {
 
 		line1 := rows[i+1]
 		line2 := rows[i+2]
-		tle, err := sat.ParseTLE(line1, line2, "wgs84")
+		tle, err := sgp4.NewTLE(id, line1, line2)
 		if err != nil {
 			return fmt.Errorf("can't parse tle: %w", err)
 		}
@@ -129,10 +130,16 @@ func Run(ctx context.Context) error {
 			return fmt.Errorf("can't parse tle: nil")
 		}
 
+		sgp4, err := sgp4.NewSGP4(tle)
+		if err != nil {
+			return fmt.Errorf("can't create sgp4: %w", err)
+		}
+
 		s := satallite{
 			ID:   id,
 			Name: name,
-			TLE:  *tle,
+			TLE:  tle,
+			SGP4: sgp4,
 		}
 		satallites = append(satallites, s)
 	}
@@ -143,19 +150,19 @@ func Run(ctx context.Context) error {
 
 	satTrackingSubjectPrefix := "sat.tracking"
 
-	// maxMsgsPerSubject := int64(8000)
+	maxMsgsPerSubject := int64(100)
 
 	if err := js.DeleteStream("SatelliteTracking"); err != nil && err != nats.ErrStreamNotFound {
 		return fmt.Errorf("can't delete stream: %w", err)
 	}
 
 	if _, err := js.AddStream(&nats.StreamConfig{
-		Name:     "SatelliteTracking",
-		Subjects: []string{satTrackingSubjectPrefix + ".>"},
-		// MaxMsgsPerSubject: maxMsgsPerSubject,
-		Retention: nats.LimitsPolicy,
-		Discard:   nats.DiscardOld,
-		Storage:   nats.FileStorage,
+		Name:              "SatelliteTracking",
+		Subjects:          []string{satTrackingSubjectPrefix + ".>"},
+		MaxMsgsPerSubject: maxMsgsPerSubject,
+		Retention:         nats.LimitsPolicy,
+		Discard:           nats.DiscardOld,
+		Storage:           nats.FileStorage,
 	}); err != nil && err != nats.ErrStreamNameAlreadyInUse {
 		return fmt.Errorf("can't create stream: %w", err)
 	}
@@ -169,28 +176,27 @@ func Run(ctx context.Context) error {
 			return ctx.Err()
 		case <-t.C:
 			now := time.Now()
-			jd := timeToJulianDay(now)
-			gmst := sat.ThetaG_JD(jd)
 
 			// s := satallites[rand.Intn(len(satallites))]
 
 			for _, s := range satallites {
-				eci, _ := sat.PropagateJDay(s.TLE, jd)
-				alt, _, llRad := sat.ECIToLLA(eci, gmst)
-				ll, err := sat.LatLongDeg(llRad)
+				lat, lng, alt, err := s.SGP4.Position(now)
 				if err != nil {
-					return fmt.Errorf("can't convert to lat long: %w", err)
+					// return fmt.Errorf("can't get position: %w", err)
+					continue
 				}
 
-				p.LongitudeDeg = ll.Longitude
-				p.LatitudeDeg = ll.Latitude
-				p.AltitudeKm = math.Abs(alt)
+				p.LongitudeDeg = lng
+				p.LatitudeDeg = lat
+				p.AltitudeKm = alt
 				b, _ := json.Marshal(p)
 				// log.Print(len(b))
 				subject := fmt.Sprintf("%s.%s", satTrackingSubjectPrefix, s.ID)
 				if _, err := js.PublishAsync(subject, b); err != nil {
 					return fmt.Errorf("can't publish: %w", err)
 				}
+
+				// log.Print(i)
 			}
 
 			// took := time.Since(now)
@@ -203,8 +209,3 @@ const (
 	secondsInADay      = 86400
 	UnixEpochJulianDay = 2440587.5
 )
-
-// timeToJulianDay converts a time.Time into a Julian day.
-func timeToJulianDay(t time.Time) float64 {
-	return float64(t.UTC().Unix())/secondsInADay + UnixEpochJulianDay
-}

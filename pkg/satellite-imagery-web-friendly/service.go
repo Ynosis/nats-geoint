@@ -67,8 +67,9 @@ func Run(ctx context.Context, tmpDir string) error {
 
 	convertToWebFriendly := func(highrezURL string) error {
 		hiRezPath := filepath.Join(webFriendlyTmpDir, highrezURL+".png")
+
 		if err := highrezObjectStore.GetFile(highrezURL, hiRezPath); err != nil {
-			return fmt.Errorf("can't get bytes from object store: %w", err)
+			return fmt.Errorf("can't get bytes from object store for '%s': %w", highrezURL, err)
 		}
 
 		const ext = ".jpg"
@@ -80,6 +81,7 @@ func Run(ctx context.Context, tmpDir string) error {
 		fullPathWithExt := fullPath + ext
 		eg.Go(func() error {
 			process := ffmpeg.Input(hiRezPath).
+				Silent(true).
 				Output(fullPathWithExt, ffmpeg.KwArgs{
 					"filter:v": "scale=1024:-1",
 					"loglevel": "quiet",
@@ -106,6 +108,7 @@ func Run(ctx context.Context, tmpDir string) error {
 		thumbnailPathWithExt := thumbnailPath + ext
 		eg.Go(func() error {
 			process := ffmpeg.Input(hiRezPath).
+				Silent(true).
 				Output(thumbnailPathWithExt, ffmpeg.KwArgs{
 					"filter:v": "scale=256:-1",
 					"loglevel": "quiet",
@@ -197,9 +200,10 @@ func Run(ctx context.Context, tmpDir string) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return ctx.Err()
 		default:
 			msgs, err := sub.Fetch(1, nats.MaxWait(b.NextBackOff()))
+
 			if err != nil && err != nats.ErrTimeout {
 				return fmt.Errorf("can't fetch message: %w", err)
 			}

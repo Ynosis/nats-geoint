@@ -207,6 +207,7 @@ func Run(ctx context.Context, tmpDir string) error {
 
 		outputFmt := fmt.Sprintf("%s/%%05d.png", hiRezImagesDir)
 		process := ffmpeg.Input(feedFile).
+			Silent(true).
 			Output(outputFmt,
 				ffmpeg.KwArgs{
 					"pix_fmt":          "rgb24",
@@ -264,24 +265,27 @@ func Run(ctx context.Context, tmpDir string) error {
 
 				lastUpdatedFrame = frame
 
-				// TODO: Talk to team about CAS
-				metadataEntry, err := metadataKVStore.Get(videoFeedID)
-				if err != nil {
-					return fmt.Errorf("can't get metadata from key value store: %w", err)
-				}
-				m := shared.MustSatelliteMetadataFromJSON(metadataEntry.Value())
-				m.HiRez.LastFrameUploaded = lastUpdatedFrame
-				if _, err := metadataKVStore.Put(videoFeedID, m.MustToJSON()); err != nil {
-					return fmt.Errorf("can't put metadata to key value store: %w", err)
+				for {
+					metadataEntry, err := metadataKVStore.Get(videoFeedID)
+					if err != nil {
+						return fmt.Errorf("can't get metadata from key value store: %w", err)
+					}
+					m := shared.MustSatelliteMetadataFromJSON(metadataEntry.Value())
+					m.HiRez.LastFrameUploaded = lastUpdatedFrame
+					if _, err := metadataKVStore.Update(videoFeedID, m.MustToJSON(), metadataEntry.Revision()); err != nil {
+						log.Printf("can't update metadata: %v", err)
+					} else {
+						totalWidth += m.HiRez.OrginalResolutionWidth
+						totalHeight += m.HiRez.OrginalResolutionHeight
+						totalCount++
+						statsMu.Lock()
+						stats.AverageWidth = totalWidth / totalCount
+						stats.AverageHeight = totalHeight / totalCount
+						statsMu.Unlock()
+						break
+					}
 				}
 
-				totalWidth += m.HiRez.OrginalResolutionWidth
-				totalHeight += m.HiRez.OrginalResolutionHeight
-				totalCount++
-				statsMu.Lock()
-				stats.AverageWidth = totalWidth / totalCount
-				stats.AverageHeight = totalHeight / totalCount
-				statsMu.Unlock()
 			}
 		}
 

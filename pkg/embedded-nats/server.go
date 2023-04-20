@@ -29,6 +29,11 @@ func NewNatsEmbeddedNATsServer(ctx context.Context, clearData bool) (*NATsEmbedd
 			Port:  4443,
 			NoTLS: true,
 		},
+		Debug:      true,
+		Logtime:    true,
+		Trace:      true,
+		MaxPayload: 1024 * 1024 * 1024,
+		MaxPending: 1024 * 1024 * 1024,
 	})
 
 	if err != nil {
