@@ -10,7 +10,7 @@ require (
 	github.com/corona10/goimagehash v1.1.0
 	github.com/goccy/go-json v0.10.2
 	github.com/hashicorp/golang-lru/v2 v2.0.2
-	github.com/nats-io/nats-server/v2 v2.9.16-0.20230403012904-14ad9837c1b9
+	github.com/nats-io/nats-server/v2 v2.9.17-0.20230421144049-5f884349dbc7
 	github.com/nats-io/nats.go v1.25.0
 	github.com/pinzolo/casee v1.0.0
 	github.com/u2takey/ffmpeg-go v0.4.2-0.20230301145721-b4a2cebb9771
@@ -36,7 +36,6 @@ require (
 	github.com/nats-io/nkeys v0.4.4 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
-	go.uber.org/automaxprocs v1.5.1 // indirect
 	golang.org/x/crypto v0.8.0 // indirect
 	golang.org/x/sys v0.7.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
