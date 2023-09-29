@@ -14,7 +14,7 @@
   "dependencies": {
     "@vueuse/components": "^8.9.4",
     "@vueuse/core": "^8.9.4",
-    "@vueuse/head": "^0.7.13",
+    "@vueuse/head": "^0.9.8",
     "json-bigint": "^1.0.0",
     "mermaid": "^10.0.2",
     "nats.ws": "^1.14.0",
