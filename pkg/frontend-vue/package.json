@@ -20,7 +20,7 @@
     "nats.ws": "^1.14.0",
     "ol": "^7.3.0",
     "vue": "^3.2.47",
-    "vue-mermaid-render": "^0.0.3",
+    "vue-mermaid-render": "^0.1.1",
     "vue-mermaid-string": "^4.0.30",
     "vue-router": "^4.1.6",
     "workbox": "^0.0.0",
