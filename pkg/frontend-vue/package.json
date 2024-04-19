@@ -22,7 +22,7 @@
     "ol": "^7.3.0",
     "vue": "^3.2.47",
     "vue-mermaid-render": "^0.0.3",
-    "vue-mermaid-string": "^4.0.30",
+    "vue-mermaid-string": "^6.0.0",
     "vue-router": "^4.1.6",
     "workbox": "^0.0.0",
     "workbox-window": "^6.5.4"
